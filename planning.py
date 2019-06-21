@@ -46,6 +46,7 @@ def rotate(origin, point, angle):
 	qx = ox + cos(angle) * (px - ox) - sin(angle) * (py - oy)
 	qy = oy + sin(angle) * (px - ox) + cos(angle) * (py - oy)
 	return qx, qy
+
 	
 
 #Find the polygon for the shot of the robot
