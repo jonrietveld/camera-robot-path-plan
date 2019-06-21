@@ -1,0 +1,18 @@
+actorPointArr: [[58,235,0],[98,178,5],[108,78,7],[101,58,8]] #Path an actor will follow #[[1,3,0],[2,2,2],[3,1,3]]
+animation:
+  fps: 30 #Number of frames per second -- high numbers do not work well
+map:
+  path: simple_rooms.png #filename or directory name of the obsticle map
+  height: 300 #Height in meters of the height of the png file (giving scale for png file)
+  width: 400 #Width in meters of the width of the png file (giving scale for png file)
+robot: #robots
+  speed: 5 #Speed in meters per second
+  accel: 3 #Acceleration in meters per second per second
+  length: 1 #Length of robot in meters
+  width: .75 #Width of robot in meters per second
+  maxTurnRad: 50 #The raduis of the smallest circle the robot can turn in. Radius in meters
+  startCoord: [(0,0)] #starting coordinates of robot(s), can be "None"
+  startTime: 30 #Timestep where robot will start, or the element number in the array of points that create a path
+  endTime: 50 #Timestep where robot will stop (ex. end at timstep 50)
+  fov: 60 #Field of view of robot camera in degrees
+  obstacleDist: obstacleDist #Max distance in meters robot can be from obsticle 

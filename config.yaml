@@ -1,0 +1,50 @@
+shots:
+  - start_time: 1 #Start time of the shot (seconds)
+    end_time: 6 #End time of the shot (seconds)
+    angle_range: [-45,45] #All allowed angles in the robots field of view (degrees)
+    dist_range: [1,4] #The range a person/actor may be from the robot (meters)
+  - start_time: 5 #Start time of the shot (seconds)
+    end_time: 8 #End time of the shot (seconds)
+    angle_range: [-50,50] #All allowed angles in the robots field of view (degrees)
+    dist_range: [0,5] #The range a person/actor may be from the robot (meters)
+
+actor:
+  path: [[4,26,0],[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8],[18,15,9]] #,[28,14,10],[33,7,11]] #Path an actor will follow
+  color: 'red'
+
+animation:
+  fps: 10 #Number of frames per second for animation - Does not effect solving time
+  in_shot: 'red'
+  out_shot: 'blue'
+
+map:
+  path: simple_rooms.png #filename or directory name of the obsticle map
+  height: 30 #Height in meters of the height of the png file (giving scale for png file)
+  width: 40 #Width in meters of the width of the png file (giving scale for png file)
+
+solve:
+  map_resolution: .2 #Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
+  time_resolution: .2 #Number of seconds to count as one time step - linearly effects runtime of code
+
+robots: #robots
+  - speed: 5 #Speed in meters per second
+    accel: 3 #Acceleration in meters per second per second
+    length: 1 #Length of robot in meters
+    width: .75 #Width of robot in meters per second
+    max_turn_rad: .75 #The raduis of the smallest circle the robot can turn in. Radius in meters
+    start_coord: [0,0] #starting coordinates of robot(s), can be "None"
+    fov: 100 #Field of view of robot camera in degrees
+    camera_orientation: 180 #Degrees from facing forward
+    obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
+    color: 'green' 
+
+  - speed: 5 #Speed in meters per second
+    accel: 3 #Acceleration in meters per second per second
+    length: 1 #Length of robot in meters
+    width: .75 #Width of robot in meters per second
+    max_turn_rad: .75 #The raduis of the smallest circle the robot can turn in. Radius in meters
+    start_coord: [0,0] #starting coordinates of robot(s), can be "None"
+    fov: 80 #Field of view of robot camera in degrees
+    camera_orientation: 180 #Degrees from facing forward
+    obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
+    color: 'magenta'
