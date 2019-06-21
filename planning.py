@@ -18,7 +18,7 @@ import time
 #find point on segment joining two closest points in array given. Find this point at given time.
 def findPointOnPathAndSlope(pathArr,time):
 	#find closest point time on path below given time
-	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[2]-time)))
+	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[2]-time))) 
 	time = round(time, 10) 
 	if time - round(pathArr[closeTime][2],10) <= 0:									#finds closest point below given time and uses it's timestamp
 		closeTime = closeTime - 1
