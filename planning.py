@@ -47,9 +47,8 @@ def rotate(origin, point, angle):
 	qy = oy + sin(angle) * (px - ox) + cos(angle) * (py - oy)
 	return qx, qy
 
-	
 
-#Find the polygon for the shot of the robot
+#Find the polygon for the shot of the rpobot
 def findShotPolygon(roboLoc,shot,camDir):
 	minShotDistVect = np.array(camDir) * shot['dist_range'][0]
 	maxShotDistVect = np.array(camDir) * shot['dist_range'][1]
