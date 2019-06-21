@@ -50,6 +50,8 @@ def rotate(origin, point, angle):
 
 
 
+
+
 #Find the polygon for the shot of the rpobot
 def findShotPolygon(roboLoc,shot,camDir):
 	minShotDistVect = np.array(camDir) * shot['dist_range'][0]
