@@ -12,6 +12,7 @@ from math import *
 from copy import *
 import heapq
 import time
+import dubins
 
 '''Shared functions'''
 #######################################################################################################################
@@ -46,10 +47,6 @@ def rotate(origin, point, angle):
 	qx = ox + cos(angle) * (px - ox) - sin(angle) * (py - oy)
 	qy = oy + sin(angle) * (px - ox) + cos(angle) * (py - oy)
 	return qx, qy
-
-
-
-
 
 
 #Find the polygon for the shot of the rpobot
@@ -182,7 +179,7 @@ def visualize(config, saveName=None):
 	else:
 		plt.show()
 
-def solve(inputconfig):
+def solve_old(inputconfig):
 	solved_config = deepcopy(inputconfig)
 	class Node():
 		"""A node class for A* Pathfinding"""
@@ -453,6 +450,36 @@ def solve(inputconfig):
 	#solved_config['robots'][0]['path'] = [[5,24,0],[6,20,1],[10,18,2],[12,15,3],[16,14,3.5],[19,5,5],[22,7,6],[20,10,7],[17,11,7.78],[17,13,8],[21,15,9],[29,14,9.78],[30,13,10],[35,5,11]]
 	#solved_config['robots'][1]['path'] = [[6,24,0],[5,22,1.1],[9,18,1],[9,15,2],[16,14,3],[17,5,4],[22,5,5],[22,9,6],[17,12,7],[18,15,8],[28,14,9],[33,7,10],[34,7,12]]
 	return solved_config
+
+
+def solve(inputconfig):
+	solve_resolution = inputconfig['solve']['map_resolution']
+	class Node():
+		"""A Node for Dykstra Search"""
+	
+		def __init__(self,time,robots,parent):
+			self.time = time
+			self.robots = robots
+			self.parent = parent
+			self.total_ctg = sum(robot.cost_to_go for robot in self.robots)
+	
+		#def __eq__(self, other):
+		#	return self.robots == other.robots
+
+	class Robot():
+
+		def __init__(self, position,given_shot,path):
+			self.position = position
+			self.given_shot = given_shot
+			self.path_sampled = path.sample_many(solve_resolution)
+			self.cost_to_go = 1*solve_resolution*len(self.path_sampled)
+
+
+		#def __eq__(self, other):
+		#	return self.position == other.position
+			
+
+
 
 #read config file
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
