@@ -9,7 +9,7 @@ shots:
     dist_range: [3,5] #The range a person/actor may be from the robot (meters)
 
 actor:
-  path: [[2,15,0],[35,15,8]] #[[4,26,0],[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8],[18,15,9]] #,[28,14,10],[33,7,11]] #Path an actor will follow
+  path: [[2,15,0],[35,15,4]] #[[4,26,0],[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8],[18,15,9]] #,[28,14,10],[33,7,11]] #Path an actor will follow
   color: 'red'
 
 animation:
@@ -31,12 +31,13 @@ robots: #robots
     accel: 3 #Acceleration in meters per second per second
     length: 1 #Length of robot in meters
     width: .75 #Width of robot in meters
-    max_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters
+    max_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
     start_coord: [0,0,0] #starting coordinates of robot(s), can be "None"
     fov: 360 #Field of view of robot camera in degrees
     camera_orientation: 180 #Degrees from facing forward
     obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
     color: 'green' 
+    path: [[11,27,0],[10.125,15,1],[22.5,15,4],[34,6,8]]
 
   - speed: 5 #Speed in meters per second
     accel: 3 #Acceleration in meters per second per second
@@ -48,3 +49,4 @@ robots: #robots
     camera_orientation: 180 #Degrees from facing forward
     obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
     color: 'magenta'
+    path: [[15,19,0],[22.625,19,5],[35,19,8]]

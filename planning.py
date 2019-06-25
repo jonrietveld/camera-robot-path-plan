@@ -75,7 +75,8 @@ def visualize(config, saveName=None):
 		
 		fov = config['robots'][robot]['fov']
 		fovFillArr = []
-		fovFillArr.append(rotatePoint[0:2])
+		if not fov >= 360:
+			fovFillArr.append(rotatePoint[0:2])
 		if fov >= 180:
 			fovFillArr.append(np.array(fovSlopes[0])+np.array(rotatePoint[0:2]))
 			fovFillArr.append(np.array(rotate([0,0],camDirection,90)) + np.array(rotatePoint[0:2]))
@@ -143,7 +144,7 @@ def visualize(config, saveName=None):
 	img1 = imageio.imread(config['map']['path'])
 	fig, ax = plt.subplots()
 	ax.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
-	ax.imshow(img1,cmap="gray",extent=[0, config['map']['width'], 0, config['map']['height']])
+	ax.imshow(img1,cmap="binary",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
 
 	#Create plot points and segments for each robots. Create the point for the actor. Create the Field of View for the robots.
 	roboLocArr = []
@@ -439,8 +440,8 @@ def solve_old(inputconfig):
 
 	maze = imageio.imread(config['map']['path'])
 
-	#print(len(maze[50]))
-	start = [2, 26, [0,-1], 0]
+	print(maze[50])
+	start = [5, 7, [1,0], 0]
 
 	#path = astar(maze, start, solved_config)
 	solved_config['robots'][0]['path'] = astar(maze, start, solved_config)
@@ -453,30 +454,126 @@ def solve_old(inputconfig):
 
 
 def solve(inputconfig):
-	solve_resolution = inputconfig['solve']['map_resolution']
+	solved_config = deepcopy(inputconfig)
+	solve_resolution = solved_config['solve']['map_resolution']
+	
+	def findPathAndCost(robot_cfg, current_position, shot):
+		#calculate ctg from starting position to shot start
+		if shot is None:
+			return [],0
+		elif shot == 'idle':
+			return [],0
+		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
+		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,-(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		
+		shot_start_loc = np.append(shot_start_loc,atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
+		path = dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
+		path_sampled = path.sample_many(solve_resolution)
+		path_sampled = path_sampled[0]
+		cost_to_go = 1*solve_resolution*len(path_sampled)
+
+		#Add on timesteps to dubens path
+		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
+		#print(shot['end_time'],shot['start_time'])
+		#print(len(path_sampled))
+		for pos in range(len(path_sampled)):
+			if (pos+1)*timestep_increment == shot['start_time']:
+				del path_sampled[pos]
+				continue
+			else:
+				path_sampled[pos] = list(path_sampled[pos])
+				path_sampled[pos].append((pos+1)*timestep_increment)
+			#print(path_sampled[pos])
+			
+		
+		#calculate ctg following actor
+		following_actor = []
+		current_position = np.array([])
+		#If endpoint was missed, add it
+		time_arr = np.arange(shot['start_time'],shot['end_time'],solved_config['solve']['time_resolution'])
+		if not time_arr[-1] == shot['end_time']:
+			time_arr = np.append(time_arr,shot['end_time'])
+		for time in time_arr:
+			actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],time)
+			current_position = np.multiply(rotate([0,0],actor_slope_unitVect,-(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+			current_position = np.append(current_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
+			current_position = np.append(current_position, time)
+			following_actor.append(current_position.tolist())
+		#Add cost to go for each segment in the path next to the actor in a given shot
+		#for loc in range(1,len(following_actor)):
+		#	cost_to_go += hypot(following_actor[loc][0] - following_actor[loc-1][0],following_actor[loc][1] - following_actor[loc-1][1])
+
+		#return total path, and cost to go
+		print(path_sampled)
+		total_path = path_sampled + following_actor
+		return total_path,cost_to_go
+
 	class Node():
 		"""A Node for Dykstra Search"""
 	
-		def __init__(self,time,robots,parent):
-			self.time = time
+		def __init__(self,robots,parent=None):
 			self.robots = robots
 			self.parent = parent
+			self.time = 0
 			self.total_ctg = sum(robot.cost_to_go for robot in self.robots)
+			for robot in robots:
+				if type(robot.given_shot) == list:
+					if robot.shot['end_time'] < self.time or self.time == 0:
+						self.time = robot.shot['end_time']
+
+		def __lt__(self, other):
+			return self.total_ctg < other.total_ctg
 	
 		#def __eq__(self, other):
 		#	return self.robots == other.robots
 
 	class Robot():
 
-		def __init__(self, position,given_shot,path):
-			self.position = position
+		def __init__(self, robot_cfg, start_position ,given_shot = None):
+			self.start_position = start_position
 			self.given_shot = given_shot
-			self.path_sampled = path.sample_many(solve_resolution)
-			self.cost_to_go = 1*solve_resolution*len(self.path_sampled)
-
+			self.path, self.cost_to_go = findPathAndCost(robot_cfg,start_position,given_shot)
+			if given_shot is None:
+				self.end_position = start_position
+			else:
+				self.end_position = self.path[len(self.path)-1]										#(x,y,theta,time)
 
 		#def __eq__(self, other):
 		#	return self.position == other.position
+			
+
+	return findPathAndCost(solved_config['robots'][0],solved_config['robots'][0]['path'][0][0:2] + [0, solved_config['robots'][0]['path'][0][2]],solved_config['shots'][0])
+	taken_shots = []
+	available_shots = []
+	open_list = []
+	heapq.heapify(open_list)
+	closed_list = []
+	end_time = solved_config['actor']['path'][-1][3]
+
+	for shot in solved_config['shots']:
+		available_shots.append(shot)
+
+	startRobotList = []
+	for robot in solved_config['robots']:
+		#if num == 0:
+		#	end_position,ctg = findEndPosAndCTG(robot,solved_config['shots'][0])
+		#	startRobotList.append(Robot(end_position,solved_config['shots'][0],ctg))
+		#else:
+		startRobotList.append(Robot(robot,robot['start_coord'],'idle'))
+
+	open_list.append(Node(startRobotList))
+
+
+	while len(open_list) > 0:
+		#do everything
+
+		node = open_list.pop()
+		if node.time == end_time:
+			#return with solution
+			pass
+
+
+		
 			
 
 
@@ -484,17 +581,24 @@ def solve(inputconfig):
 #read config file
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
-config = yaml.safe_load(open('config.yaml','r'))
-t0 = time.time()
-solved_config = solve(config)
-t1 = time.time()
-print("Total time: {}".format(t1-t0))
+config = yaml.safe_load(open('rocky.yaml','r'))
+#print(findPointOnPathAndSlope(config['actor']['path'],5))
+#print(findPointOnPathAndSlope(config['actor']['path'],8))
+#t0 = time.time()
+tmpvar,loss = solve(config)
+tmpvar = [element[0:2] + [element[3]] for element in tmpvar]
+tmpvar.sort(key=lambda position: position[2])
+config['robots'][0]['path'] = tmpvar
+config['robots'][1]['path'] = None
+print(config['robots'][0]['path'])
+#t1 = time.time()
+#print("Total time: {}".format(t1-t0))
 #with open('result.yaml', 'w') as yaml_file:
 #	yaml.dump(solved_config, yaml_file, default_flow_style=False)
-visualize(solved_config)
+#visualize(solved_config)
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
 #config = yaml.safe_load(open('result_working2.yaml', 'r'))
-#visualize(config)
+visualize(config)
 #config = yaml.safe_load(open('result.yaml', 'r'))
 #visualize(config,'demo.gif')
