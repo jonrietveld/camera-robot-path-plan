@@ -13,6 +13,7 @@ from copy import *
 import heapq
 import time
 import dubins
+import itertools
 
 '''Shared functions'''
 #######################################################################################################################
@@ -504,75 +505,185 @@ def solve(inputconfig):
 		#	cost_to_go += hypot(following_actor[loc][0] - following_actor[loc-1][0],following_actor[loc][1] - following_actor[loc-1][1])
 
 		#return total path, and cost to go
-		print(path_sampled)
+		#print(path_sampled)
 		total_path = path_sampled + following_actor
 		return total_path,cost_to_go
+
+	class Robot():
+
+		def __init__(self, identity, position ,given_shot = None):
+			self.position = position
+			self.identity = identity
+			self.robot_cfg = solved_config['robots'][identity]
+			self.given_shot = given_shot
+			self.path, self.cost_to_go = findPathAndCost(self.robot_cfg,position,given_shot)
+			if given_shot is None:
+				self.end_position = position
+			elif given_shot == 'idle':
+				self.end_position = position
+			else:
+				self.end_position = self.path[-1]										#(x,y,theta,time)
+
+		def __eq__(self, other):
+			return self.identity == other.identity
 
 	class Node():
 		"""A Node for Dykstra Search"""
 	
-		def __init__(self,robots,parent=None):
+		def __init__(self,robots,available_shots,time,parent=None):
 			self.robots = robots
 			self.parent = parent
-			self.time = 0
+			self.time = time
+			self.available_shots = available_shots
+			self.unassigned_robots = []
+			self.assigned_robots = []
 			self.total_ctg = sum(robot.cost_to_go for robot in self.robots)
+			self.g = 0
+			self.h = 0
+			self.f = 0
 			for robot in robots:
-				if type(robot.given_shot) == list:
-					if robot.shot['end_time'] < self.time or self.time == 0:
-						self.time = robot.shot['end_time']
+				if robot.given_shot is None:
+					self.unassigned_robots.append(robot)
+				elif robot.given_shot == 'idle':
+					self.assigned_robots.append(robot)
+				else:
+					self.assigned_robots.append(robot)
+
+		def findChildren(self):
+
+			
+
+			#If there are unassigned robots, then find all permutations of shots with robots possible
+			
+			#	if len(self.unassigned_robots) >= len(self.available_shots):
+			#		roboPermutations =  list(itertools.permutations(self.unassigned_robots,len(self.available_shots))) 
+			#		
+			#		for perm in roboPermutations:	# roboPermutations looks like ((robot1,robot2),(robot1,robot3),(robot2,robot1),(robot2,robot3)...)
+			#			robot_list = []
+			#			unassigned_robots = deepcopy(self.unassigned_robots)
+			#			current_shot_num = 0
+			#			for robot in perm:
+			#				robot_list.append(Robot(robot.identity,robot.end_position,self.available_shots[current_shot_num]))
+			#				unassigned_robots.remove(robot)
+			#				current_shot_num += 1
+			#			for robot in unassigned_robots:
+			#				robot_list.append(Robot(robot.identity,robot.end_position,'idle'))
+			#			node_list.append(Node(robot_list,[],self.time,self))
+			#			#unassigned_robots = []
+			#
+			#		#available_shots = []
+			#	else: #if len(self.unassigned_robots) < len(available_shots)
+
+			node_list = []
+			
+			#If there are unassigned robots, then find all permutations of shots with robots possible
+			if len(self.unassigned_robots) > 0:
+				#If there are more or equal unassigned robots than available shots, find all permutations of robots to assign shots too.
+				available_shots = deepcopy(self.available_shots)
+				for robot in self.unassigned_robots:
+					available_shots.append('idle')
+
+				shotPermutations = list(itertools.permutations(available_shots,len(self.unassigned_robots)))
+				for perm in shotPermutations:	# shotPermutations looks like ((shot1,shot2),(shot1,shot3),(shot2,shot1),(shot2,shot3)...)
+					robot_list = []
+					unassigned_shots = deepcopy(available_shots)
+					unassigned_robots = deepcopy(self.unassigned_robots)
+					current_robot_num = 0
+					for shot in perm:
+						robot = unassigned_robots[current_robot_num]
+						robot_list.append(Robot(robot.identity,robot.end_position,shot))
+						unassigned_shots.remove(shot)
+						unassigned_robots.remove(robot)
+						current_robot_num += 1
+					for robot in unassigned_robots:
+						robot_list.append(Robot(robot.identity,robot.end_position,'idle'))
+					node_list.append(Node(robot_list,unassigned_shots,self.time,self))
+				return node_list
+
+			#If there is no unassigned robots, set the robot(s) with the first shot to end as having None as their shot
+			#and put them in the unassigned robots list. Set the time to the time the shot ended
+			else:
+				#print(len(self.assigned_robots))
+				#print([[robot.given_shot,type(robot.given_shot)] for robot in self.assigned_robots])
+				min_end_time = min([0]+[robot.given_shot['end_time'] for robot in self.assigned_robots if type(robot.given_shot) == dict])
+				#print("Min end time: ",min_end_time)
+				new_node = deepcopy(self)
+				new_node.time = min_end_time
+				for robot in new_node.assigned_robots:
+					if robot.given_shot['end_time'] == min_end_time:
+						robot.given_shot = None
+						new_node.unassigned_robots.append(robot)
+						new_node.assigned_robots.remove(robot)
+				return [new_node]
+				
 
 		def __lt__(self, other):
 			return self.total_ctg < other.total_ctg
+
+		#def __repr__(self):
+		#	return "Node(position={})".format(self.position)
+
+		#def __hash__(self):
+		#	return hash(self.__repr__())
 	
 		#def __eq__(self, other):
 		#	return self.robots == other.robots
 
-	class Robot():
-
-		def __init__(self, robot_cfg, start_position ,given_shot = None):
-			self.start_position = start_position
-			self.given_shot = given_shot
-			self.path, self.cost_to_go = findPathAndCost(robot_cfg,start_position,given_shot)
-			if given_shot is None:
-				self.end_position = start_position
-			else:
-				self.end_position = self.path[len(self.path)-1]										#(x,y,theta,time)
-
-		#def __eq__(self, other):
-		#	return self.position == other.position
-			
-
-	return findPathAndCost(solved_config['robots'][0],solved_config['robots'][0]['path'][0][0:2] + [0, solved_config['robots'][0]['path'][0][2]],solved_config['shots'][0])
-	taken_shots = []
-	available_shots = []
+	#return findPathAndCost(solved_config['robots'][0],solved_config['robots'][0]['path'][0][0:2] + [0, solved_config['robots'][0]['path'][0][2]],solved_config['shots'][0])
+	
+	#A* algorithm
+	#Initialize lists/heaps/dictionaries and endtime
 	open_list = []
 	heapq.heapify(open_list)
-	closed_list = []
-	end_time = solved_config['actor']['path'][-1][3]
+	open_list_dict = {}
+	closed_list = set(())
+	end_time = solved_config['actor']['path'][-1][2]
 
-	for shot in solved_config['shots']:
-		available_shots.append(shot)
-
+	#Add first robot to the heap
 	startRobotList = []
-	for robot in solved_config['robots']:
-		#if num == 0:
-		#	end_position,ctg = findEndPosAndCTG(robot,solved_config['shots'][0])
-		#	startRobotList.append(Robot(end_position,solved_config['shots'][0],ctg))
-		#else:
-		startRobotList.append(Robot(robot,robot['start_coord'],'idle'))
+	for robotNumber,robot in enumerate(solved_config['robots']):
+		robot['start_coord'].append(0)
+		startRobotList.append(Robot(robotNumber,robot['start_coord'],None))
 
-	open_list.append(Node(startRobotList))
+	open_list.append(Node(startRobotList,solved_config['shots'],0,None))
+
+	#While the open_list has nodes in it, keep running
+	#while len(open_list) > 0:
+	print("Open List Length: ",len(open_list)) #debug
+	#for node in open_list:
+	#	print(len(node.unassigned_robots))
+	#	for robot in node.unassigned_robots:
+	#		print(robot.identity, robot.given_shot)
+	#Remove one node from the heap and add it to the closed_list
+	current_node = heapq.heappop(open_list)
+	closed_list.add(current_node)
+	if current_node.time == end_time: #If the node has reached the end time, then finish and return the paths
+		#return with solution
+		return solved_config
+	
+	for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
+		if child_node in closed_list:
+			continue
+		child_node.g = current_node.g + child_node.total_ctg		#fix please
+		child_node.h = 0
+		child_node.f = child_node.g + child_node.h
+		if child_node in open_list_dict:
+			if child_node.g >= open_list_dict[child_node]:
+				continue
+		open_list_dict[child_node] = child_node.g
+		#if child.g < 1000:
+		heapq.heappush(open_list, child_node)
 
 
-	while len(open_list) > 0:
-		#do everything
-
-		node = open_list.pop()
-		if node.time == end_time:
-			#return with solution
-			pass
+	for num,node in enumerate(open_list):
+		print("node",num)
+		for robot in node.robots:
+			print('robot',robot.identity,robot.given_shot)
 
 
+	#If no solution found print that
+	#print('No Solution Found')
+	return solved_config
 		
 			
 
@@ -585,12 +696,12 @@ config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],5))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
 #t0 = time.time()
-tmpvar,loss = solve(config)
-tmpvar = [element[0:2] + [element[3]] for element in tmpvar]
-tmpvar.sort(key=lambda position: position[2])
-config['robots'][0]['path'] = tmpvar
-config['robots'][1]['path'] = None
-print(config['robots'][0]['path'])
+solved_config = solve(config)
+#tmpvar = [element[0:2] + [element[3]] for element in tmpvar]
+#tmpvar.sort(key=lambda position: position[2])
+#config['robots'][0]['path'] = tmpvar
+#config['robots'][1]['path'] = None
+#print(config['robots'][0]['path'])
 #t1 = time.time()
 #print("Total time: {}".format(t1-t0))
 #with open('result.yaml', 'w') as yaml_file:
@@ -599,6 +710,6 @@ print(config['robots'][0]['path'])
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
 #config = yaml.safe_load(open('result_working2.yaml', 'r'))
-visualize(config)
+visualize(solved_config)
 #config = yaml.safe_load(open('result.yaml', 'r'))
 #visualize(config,'demo.gif')
