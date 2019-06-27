@@ -28,7 +28,10 @@ def findPointOnPathAndSlope(pathArr,time):
 		closeTime -= 1
 	
 	slope = [pathArr[closeTime+1][0]-pathArr[closeTime][0], pathArr[closeTime+1][1]-pathArr[closeTime][1]]
-	slope = np.array(slope)/(np.array(slope)**2).sum()**.5					#Convert slope to unit vector
+	try:
+		slope = np.array(slope)/(np.array(slope)**2).sum()**.5					#Convert slope to unit vector
+	except:
+		print("error, Here is the slope",slope)
 	if pathArr[closeTime][2] == time: 										#If requested time is in array, just return that point 
 		return [pathArr[closeTime][0],pathArr[closeTime][1]],slope
 	#use time to find point on line
@@ -461,10 +464,11 @@ def solve(inputconfig):
 			return [],0
 		elif shot == 'idle':
 			return [],0
+
 		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
 		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 		
-		shot_start_loc = np.append(shot_start_loc,atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 		path = dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
 		path_sampled = path.sample_many(solve_resolution)
 		path_sampled = path_sampled[0]
@@ -475,12 +479,12 @@ def solve(inputconfig):
 		#print(shot['end_time'],shot['start_time'])
 		#print(len(path_sampled))
 		for pos in range(len(path_sampled)):
-			if (pos+1)*timestep_increment == shot['start_time']:
+			if (pos+1)*timestep_increment + current_position[3] == shot['start_time']:
 				del path_sampled[pos]
 				continue
 			else:
 				path_sampled[pos] = list(path_sampled[pos])
-				path_sampled[pos].append((pos+1)*timestep_increment)
+				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
 			#print(path_sampled[pos])
 			
 		
@@ -536,8 +540,7 @@ def solve(inputconfig):
 			self.time = time
 			self.available_shots = available_shots
 			self.unassigned_robots = []
-			self.assigned_robots = []
-			self.total_ctg = sum(0+robot.cost_to_go for robot in self.unassigned_robots)
+			self.assigned_robots = [] 
 			self.g = 0
 			self.h = 0
 			self.f = 0
@@ -546,31 +549,10 @@ def solve(inputconfig):
 					self.unassigned_robots.append(robot)
 				else:
 					self.assigned_robots.append(robot)
+			self.total_ctg = sum([0]+[robot.cost_to_go for robot in self.assigned_robots if parent == None or (parent != None and robot in parent.unassigned_robots)])
 
 		def findChildren(self):
 
-			
-
-			#If there are unassigned robots, then find all permutations of shots with robots possible
-			
-			#	if len(self.unassigned_robots) >= len(self.available_shots):
-			#		roboPermutations =  list(itertools.permutations(self.unassigned_robots,len(self.available_shots))) 
-			#		
-			#		for perm in roboPermutations:	# roboPermutations looks like ((robot1,robot2),(robot1,robot3),(robot2,robot1),(robot2,robot3)...)
-			#			robot_list = []
-			#			unassigned_robots = deepcopy(self.unassigned_robots)
-			#			current_shot_num = 0
-			#			for robot in perm:
-			#				robot_list.append(Robot(robot.identity,robot.end_position,self.available_shots[current_shot_num]))
-			#				unassigned_robots.remove(robot)
-			#				current_shot_num += 1
-			#			for robot in unassigned_robots:
-			#				robot_list.append(Robot(robot.identity,robot.end_position,'idle'))
-			#			node_list.append(Node(robot_list,[],self.time,self))
-			#			#unassigned_robots = []
-			#
-			#		#available_shots = []
-			#	else: #if len(self.unassigned_robots) < len(available_shots)
 
 			node_list = []
 			
