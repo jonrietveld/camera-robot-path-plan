@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib import collections
 import matplotlib.patches as patches
-import matplotlib.path as path
+import matplotlib.path as mplpath
 import imageio
 import numpy as np
 import yaml
@@ -28,10 +28,11 @@ def findPointOnPathAndSlope(pathArr,time):
 		closeTime -= 1
 	
 	slope = [pathArr[closeTime+1][0]-pathArr[closeTime][0], pathArr[closeTime+1][1]-pathArr[closeTime][1]]
-	try:
+	if slope == [0,0]:
+		slope = [1,0]
+	else:
 		slope = np.array(slope)/(np.array(slope)**2).sum()**.5					#Convert slope to unit vector
-	except:
-		print("error, Here is the slope",slope)
+	
 	if pathArr[closeTime][2] == time: 										#If requested time is in array, just return that point 
 		return [pathArr[closeTime][0],pathArr[closeTime][1]],slope
 	#use time to find point on line
@@ -51,9 +52,9 @@ def rotate(origin, point, angle):
 
 
 #Find the polygon for the shot of the rpobot
-def findShotPolygon(roboLoc,shot,camDir):
-	minShotDistVect = np.array(camDir) * shot['dist_range'][0]
-	maxShotDistVect = np.array(camDir) * shot['dist_range'][1]
+def findShotPolygon(roboLoc,shot,camDir_unit_vect):
+	minShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][0]
+	maxShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][1]
 	angle_values = np.arange(shot['angle_range'][0], shot['angle_range'][1], 5)
 	minShotVect = []
 	maxShotVect = []
@@ -114,7 +115,7 @@ def visualize(config, saveName=None):
 						for shotnum,shot in enumerate(config['shots']):
 							if shot['start_time'] <= time <= shot['end_time']:
 								shotarr = findShotPolygon(ptOnPath,shot,camDirectionUnit)
-								pathObject = path.Path(shotarr)
+								pathObject = mplpath.Path(shotarr)
 								insidePoly = (pathObject.contains_points([actorPtOnPath[0:2]]))
 								#print(time)
 								
@@ -141,6 +142,7 @@ def visualize(config, saveName=None):
 			return combArr
 
 	
+	print('Visualizing')
 	#read image and create plot
 	img1 = imageio.imread(config['map']['path'])
 	fig, ax = plt.subplots()
@@ -282,7 +284,7 @@ def solve_old(inputconfig):
 		for shot in solved_config['shots']:
 			if shot['start_time'] <= node.position[3] <= shot['end_time']:
 				shotarr = findShotPolygon([x,y],shot,node_cam_dir)
-				pathObject = path.Path(shotarr)
+				pathObject = mplpath.Path(shotarr)
 				insidePoly = pathObject.contains_points([actor_xy[0:2]])
 				if insidePoly:
 					center_polygon = [node_cam_dir[0]*(shot['dist_range'][1] - shot['dist_range'][0]),node_cam_dir[1]*(shot['dist_range'][1] - shot['dist_range'][0])]
@@ -486,6 +488,12 @@ def solve(inputconfig):
 				path_sampled[pos] = list(path_sampled[pos])
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
 			#print(path_sampled[pos])
+
+		#Add cost to go for traveling too fast on dubins path
+		if len(path_sampled)>1:
+			speed = hypot(path_sampled[0][0] - path_sampled[1][0],path_sampled[0][1] - path_sampled[1][1])/timestep_increment
+			if speed > robot_cfg['speed']:
+				cost_to_go += 1000000			#Change fix please
 			
 		
 		#calculate ctg following actor
@@ -501,6 +509,14 @@ def solve(inputconfig):
 			current_position = np.append(current_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 			current_position = np.append(current_position, time)
 			following_actor.append(current_position.tolist())
+			#Add cost for being oustide of shot polygon
+			robot_cam_dir = rotate([0,0],actor_slope_unitVect,robot_cfg['camera_orientation'])
+			shot_poly = findShotPolygon(current_position,shot,robot_cam_dir)
+			pathObject = mplpath.Path(shot_poly)
+			insidePoly = pathObject.contains_points([actor_xyt[0:2]])
+			if not insidePoly:
+				cost_to_go += 500	#fix please
+
 		#Add cost to go for each segment in the path next to the actor in a given shot
 		#for loc in range(1,len(following_actor)):
 		#	cost_to_go += hypot(following_actor[loc][0] - following_actor[loc-1][0],following_actor[loc][1] - following_actor[loc-1][1])
@@ -648,7 +664,7 @@ def solve(inputconfig):
 
 	#While the open_list has nodes in it, keep running
 	while len(open_list) > 0:
-		print("Open List Length: ",len(open_list)) #debug
+		#print("Open List Length: ",len(open_list)) #debug
 		#for node in open_list:
 		#	print(len(node.unassigned_robots))
 		#	for robot in node.unassigned_robots:
@@ -658,16 +674,17 @@ def solve(inputconfig):
 		closed_list.add(current_node)
 
 
-		if current_node.time == end_time and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
+		if current_node.time == end_time and len(current_node.available_shots) == 0: #and current_node.f<10000000: #If the node has reached the end time, then finish and return the paths
+			print('Solution Found')
 			robot_paths = []
 			for robot in solved_config['robots']:
 				robot_paths.append([])
 			current = current_node
 			added_shots = []	#Keep track of which shots have already been added to path to avoid duplicate adds
 			while current is not None:
-				print('available_shots',current.available_shots)
-				for robot in current.robots:
-					print(robot.identity,robot.given_shot,current.parent)
+				#print('available_shots',current.available_shots)	#debug
+				#for robot in current.robots:
+					#print(robot.identity,robot.given_shot,current.parent)	#debug
 				for robot in current.assigned_robots:
 					#print(robot.identity,robot.given_shot,current.parent)
 					if robot.given_shot in added_shots:
@@ -680,7 +697,7 @@ def solve(inputconfig):
 				solved_config['robots'][element]['path'] = robot_paths[element][::-1]
 				if solved_config['robots'][element]['path'] != [] and solved_config['robots'][element]['path'][-1][2] < end_time:
 					solved_config['robots'][element]['path'].append(solved_config['robots'][element]['path'][-1][0:2] + [end_time])
-				print(solved_config['robots'][element]['path'])
+				#print(solved_config['robots'][element]['path'])	#debug
 			for robotNum in range(0,len(solved_config['robots'])):
 				if solved_config['robots'][robotNum]['path'] == []:
 					del solved_config['robots'][robotNum]['path']
@@ -708,7 +725,7 @@ def solve(inputconfig):
 
 
 	#If no solution found print that
-	print('No Solution Found')
+	print('No Solution Found, check your starting positions, speeds, shots, and robots.')
 	return solved_config
 		
 			
