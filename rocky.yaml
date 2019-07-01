@@ -13,7 +13,7 @@ shots:
     dist_range: [3,5] #The range a person/actor may be from the robot (meters)
 
 actor:
-  path: [[4,26,0],[32,4,8]] #[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8]] #,[18,15,9]] #,[28,14,10],[33,7,11]]      [[2,15,0],[35,15,4]] #Path an actor will follow
+  path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]] #[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8]] #,[18,15,9]] #,[28,14,10],[33,7,11]]      [[2,15,0],[35,15,4]] #Path an actor will follow
   color: 'red'
 
 animation:
@@ -28,7 +28,7 @@ map:
 
 solve:
   map_resolution: 1 #Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
-  time_resolution: .2 #Number of seconds to count as one time step - linearly effects runtime of code
+  time_resolution: .1 #Number of seconds to count as one time step - linearly effects runtime of code
 
 robots: #robots
   - speed: 5 #Speed in meters per second

@@ -4,6 +4,8 @@ import matplotlib.animation as animation
 from matplotlib import collections
 import matplotlib.patches as patches
 import matplotlib.path as mplpath
+from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 import imageio
 import numpy as np
 import yaml
@@ -459,27 +461,30 @@ def solve_old(inputconfig):
 def solve(inputconfig):
 	solved_config = deepcopy(inputconfig)
 	solve_resolution = solved_config['solve']['map_resolution']
+
+	def findPathToShot(current_position,shot_start_loc,robot_cfg):
+		return dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
 	
 	def findPathAndCost(robot_cfg, current_position, shot):
-		#calculate ctg from starting position to shot start
 		if shot is None:
 			return [],0
-		elif shot == 'idle':
+		elif shot == 'finished':
 			return [],0
 
+		#calculate ctg from starting position to shot start
 		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
 		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
-		
-		path = dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
+
+		#Find a path not obstructed by obsticles, and not obstructed by shots to the start of the shot.
+		path = findPathToShot(current_position,shot_start_loc,robot_cfg)
+
 		path_sampled = path.sample_many(solve_resolution)
 		path_sampled = path_sampled[0]
 		cost_to_go = 1*solve_resolution*len(path_sampled)
 
 		#Add on timesteps to dubens path
 		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
-		#print(shot['end_time'],shot['start_time'])
-		#print(len(path_sampled))
 		for pos in range(len(path_sampled)):
 			if (pos+1)*timestep_increment + current_position[3] == shot['start_time']:
 				del path_sampled[pos]
@@ -487,13 +492,12 @@ def solve(inputconfig):
 			else:
 				path_sampled[pos] = list(path_sampled[pos])
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
-			#print(path_sampled[pos])
 
 		#Add cost to go for traveling too fast on dubins path
-		if len(path_sampled)>1:
-			speed = hypot(path_sampled[0][0] - path_sampled[1][0],path_sampled[0][1] - path_sampled[1][1])/timestep_increment
-			if speed > robot_cfg['speed']:
-				cost_to_go += 1000000			#Change fix please
+		#if len(path_sampled)>1:
+		#	speed = hypot(path_sampled[0][0] - path_sampled[1][0],path_sampled[0][1] - path_sampled[1][1])/timestep_increment
+		#	if speed > robot_cfg['speed']:
+		#		cost_to_go += 1000000			#Change fix please
 			
 		
 		#calculate ctg following actor
@@ -517,6 +521,18 @@ def solve(inputconfig):
 			if not insidePoly:
 				cost_to_go += 500	#fix please
 
+		#Smooth out path for following actor
+		smoothingnum = 11
+		for itt in range(0,smoothingnum):
+			x = np.array([pathpoint[0] for pathpoint in following_actor])
+			y = np.array([pathpoint[1] for pathpoint in following_actor])
+			t = np.array([pathpoint[3] for pathpoint in following_actor])
+			#print(len(x),len(y))
+			window_size, poly_order = int(2.0/solved_config['solve']['time_resolution'])+1, 3
+			x_sg = savgol_filter(x, window_size, poly_order)
+			y_sg = savgol_filter(y, window_size, poly_order)
+			following_actor = [[x_sg[loc],y_sg[loc],following_actor[loc][2],following_actor[loc][3]] for loc in range(0,len(following_actor))]
+
 		#Add cost to go for each segment in the path next to the actor in a given shot
 		#for loc in range(1,len(following_actor)):
 		#	cost_to_go += hypot(following_actor[loc][0] - following_actor[loc-1][0],following_actor[loc][1] - following_actor[loc-1][1])
@@ -536,7 +552,7 @@ def solve(inputconfig):
 			self.path, self.cost_to_go = findPathAndCost(self.robot_cfg,position,given_shot)
 			if given_shot is None:
 				self.end_position = position
-			elif given_shot == 'idle':
+			elif given_shot == 'finished':
 				self.end_position = position
 			else:
 				self.end_position = self.path[-1]										#(x,y,theta,time)
@@ -577,27 +593,35 @@ def solve(inputconfig):
 				#If there are more or equal unassigned robots than available shots, find all permutations of robots to assign shots too.
 				available_shots = deepcopy(self.available_shots)
 				for robot in self.unassigned_robots:
-					available_shots.append('idle')
+					available_shots.append('finished')
+				for robot in self.unassigned_robots:
+					available_shots.append(None)
 
-				shotPermutations = list(itertools.permutations(available_shots,len(self.unassigned_robots)))
+				shotPermutations = list(itertools.permutations(available_shots,1))	#for only one robot
 				#print(shotPermutations)
 				for perm in shotPermutations:	# shotPermutations looks like ((shot1,shot2),(shot1,shot3),(shot2,shot1),(shot2,shot3)...)
 					robot_list = []
 					unassigned_shots = deepcopy(available_shots)
 					unassigned_robots = deepcopy(self.unassigned_robots)
-					for shot in perm:
-						robot = unassigned_robots[0]
-						if type(shot) == dict and robot.end_position[3] > shot['start_time']:
-							robot_list.append(Robot(robot.identity,robot.end_position,'idle'))
-						else:
-							robot_list.append(Robot(robot.identity,robot.end_position,shot))
-							unassigned_shots.remove(shot)
-						unassigned_robots.remove(robot)
+					#for shot in perm:
+					shot = perm[0]
+					robot = unassigned_robots[0]
+					if type(shot) == dict and robot.end_position[3] > shot['start_time']:
+						robot_list.append(Robot(robot.identity,robot.end_position,None))
+					else:
+						robot_list.append(Robot(robot.identity,robot.end_position,shot))
+						unassigned_shots.remove(shot)
+					unassigned_robots.remove(robot)
+
+					for robot in unassigned_robots:
+						robot_list.append(deepcopy(robot))
 
 					#for robot in unassigned_robots:
 					#	robot_list.append(Robot(robot.identity,robot.end_position,'idle'))
 					for shot in list(unassigned_shots):
-						if shot == 'idle':
+						if shot is None:
+							unassigned_shots.remove(shot)
+						elif shot == 'finished':
 							unassigned_shots.remove(shot)
 					node_list.append(Node(robot_list+deepcopy(self.assigned_robots),unassigned_shots,self.time,self))
 				return node_list
@@ -625,10 +649,11 @@ def solve(inputconfig):
 				for robot in new_node.assigned_robots:
 					if not type(robot.given_shot) == dict:
 						continue
-					if robot.given_shot['end_time'] == min_end_time:
+					elif robot.given_shot['end_time'] == min_end_time:
 						robot.given_shot = None
 						new_node.unassigned_robots.append(robot)
 						new_node.assigned_robots.remove(robot)
+				
 				return [new_node]
 				
 
@@ -644,7 +669,6 @@ def solve(inputconfig):
 		def __eq__(self, other):
 			return self.__hash__() == other.__hash__()
 
-	#return findPathAndCost(solved_config['robots'][0],solved_config['robots'][0]['path'][0][0:2] + [0, solved_config['robots'][0]['path'][0][2]],solved_config['shots'][0])
 	
 	#A* algorithm
 	#Initialize lists/heaps/dictionaries and endtime
@@ -666,9 +690,11 @@ def solve(inputconfig):
 	while len(open_list) > 0:
 		#print("Open List Length: ",len(open_list)) #debug
 		#for node in open_list:
-		#	print(len(node.unassigned_robots))
+		#	print('unassigned robots:',len(node.unassigned_robots))
 		#	for robot in node.unassigned_robots:
-		#		print(robot.identity, robot.given_shot)
+		#		print('robot:',robot.identity, robot.given_shot)
+		#	for robot in node.assigned_robots:
+		#		print('robot:',robot.identity, robot.given_shot)
 		#Remove one node from the heap and add it to the closed_list
 		current_node = heapq.heappop(open_list)
 		closed_list.add(current_node)
@@ -707,7 +733,9 @@ def solve(inputconfig):
 		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
 			if child_node in closed_list:
 				continue
-			child_node.g = current_node.g + child_node.total_ctg		#fix please
+			elif child_node in open_list:
+				continue
+			child_node.g = current_node.g + child_node.total_ctg
 			child_node.h = 0
 			child_node.f = child_node.g + child_node.h
 			if child_node in open_list_dict:
@@ -740,6 +768,20 @@ config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
 #t0 = time.time()
 solved_config = solve(config)
+
+#fig, ax = plt.subplots(figsize=(100,100))
+#for robot in solved_config['robots']:
+#	if 'path' in robot:
+#		x = np.array([pathpoint[0] for pathpoint in robot['path']])
+#		y = np.array([pathpoint[1] for pathpoint in robot['path']])
+#		t = np.array([pathpoint[2] for pathpoint in robot['path']])
+#		window_size, poly_order = 7, 3
+#		x_sg = savgol_filter(x, window_size, poly_order)
+#		y_sg = savgol_filter(y, window_size, poly_order)
+#		ax.plot(x, y, 'k', label= "Smoothed curve")
+#		#print(xx,yy_sg)
+#plt.show()
+
 #tmpvar = [element[0:2] + [element[3]] for element in tmpvar]
 #tmpvar.sort(key=lambda position: position[2])
 #config['robots'][0]['path'] = tmpvar
