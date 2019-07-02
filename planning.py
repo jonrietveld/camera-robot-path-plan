@@ -19,7 +19,7 @@ import itertools
 
 '''Shared functions'''
 #######################################################################################################################
-#find point on segment joining two closest points in array given. Find this point at given time.
+# Find point on segment joining two closest points in array given. Find this point at given time.
 def findPointOnPathAndSlope(pathArr,time):
 	#find closest point time on path below given time
 	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[2]-time)))   
@@ -43,17 +43,16 @@ def findPointOnPathAndSlope(pathArr,time):
 	intersect = np.insert(intersect,2,time)
 	return intersect,slope
 
-#Rotate a point counterclockwise by a given angle around a given origin.
-def rotate(origin, point, angle):
-	angle = radians(angle)
+# Rotate a point counterclockwise by a given angle around a given origin.
+def rotate(origin, point, angle_degrees):
+	angle = radians(angle_degrees)
 	ox, oy = origin
 	px, py = point
 	qx = ox + cos(angle) * (px - ox) - sin(angle) * (py - oy)
 	qy = oy + sin(angle) * (px - ox) + cos(angle) * (py - oy)
 	return qx, qy
 
-
-#Find the polygon for the shot of the rpobot
+# Find the polygon for the shot of the robot
 def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 	minShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][0]
 	maxShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][1]
@@ -69,15 +68,17 @@ def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 	for element in minShotVect:
 		concatVect.append(element+np.array(roboLoc[0:2]))
 	return concatVect
-#######################################################################################################################
 
-def visualize(config, saveName=None):
-	def findFovRays(slope,robot,rotatePoint):
-		camDirectionUnit = rotate([0,0],slope,config['robots'][robot]['camera_orientation'])
+# Find the field of view rays for the robot wrt its config. (needs to be adjusted for shot)
+def findFovRays(roboSlope,robot_num,rotatePoint,shot = None):
+		if shot is None:
+			camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
+		else:
+			camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'] + (sum(shot['angle_range'])/2))
 		camDirection = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
-		fovSlopes = [rotate([0,0],camDirection,config['robots'][robot]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot]['fov']/2)]
+		fovSlopes = [rotate([0,0],camDirection,config['robots'][robot_num]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot_num]['fov']/2)]
 		
-		fov = config['robots'][robot]['fov']
+		fov = config['robots'][robot_num]['fov']
 		fovFillArr = []
 		if not fov >= 360:
 			fovFillArr.append(rotatePoint[0:2])
@@ -96,8 +97,10 @@ def visualize(config, saveName=None):
 			fovFillArr.append((fovSlopes[1]+np.array(rotatePoint[0:2])))
 
 		return fovFillArr,camDirectionUnit
-				
+#######################################################################################################################
 
+def visualize(config, saveName=None):
+				
 	#update animation
 	def update(i):
 		#Set actor point for 'i' timestep
@@ -124,6 +127,8 @@ def visualize(config, saveName=None):
 								if insidePoly:
 									roboShot[2*(robot*len(config['shots']) + shotnum)].set_xy(shotarr)
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy([[0,0]])
+									fovRays,_ = findFovRays(slope,robot,ptOnPath,shot)
+									fovFill[robot].set_xy(fovRays)
 								else:
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy(shotarr)
 									roboShot[2*(robot*len(config['shots']) + shotnum)].set_xy([[0,0]])
@@ -464,6 +469,20 @@ def solve(inputconfig):
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg):
 		return dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
+
+	def isValidPath(path,node):
+		current = node
+		while current != None:
+			for robot in current.assigned_robots:
+				if type(robot.given_shot) == dict and len(robot.path) > 0:
+					for roboPos in robot.path:
+						fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)
+						pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
+						insidePoly = mplpath.Path(fovPoly).contains_points(pathPos[0:2])
+						if insidePoly[0]:
+							return False
+			current = current.parent
+		return True
 	
 	def findPathAndCost(robot_cfg, current_position, shot):
 		if shot is None:
@@ -514,12 +533,12 @@ def solve(inputconfig):
 			current_position = np.append(current_position, time)
 			following_actor.append(current_position.tolist())
 			#Add cost for being oustide of shot polygon
-			robot_cam_dir = rotate([0,0],actor_slope_unitVect,robot_cfg['camera_orientation'])
-			shot_poly = findShotPolygon(current_position,shot,robot_cam_dir)
-			pathObject = mplpath.Path(shot_poly)
-			insidePoly = pathObject.contains_points([actor_xyt[0:2]])
-			if not insidePoly:
-				cost_to_go += 500	#fix please
+			#robot_cam_dir = rotate([0,0],actor_slope_unitVect,robot_cfg['camera_orientation'])
+			#shot_poly = findShotPolygon(current_position,shot,robot_cam_dir)
+			#pathObject = mplpath.Path(shot_poly)
+			#insidePoly = pathObject.contains_points([actor_xyt[0:2]])
+			#if not insidePoly:
+			#	cost_to_go += 500	#fix please
 
 		#Smooth out path for following actor
 		smoothingnum = 11
@@ -731,6 +750,8 @@ def solve(inputconfig):
 			return solved_config
 		
 		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
+			#if len(child_node.assigned_robots) > 0:
+			#	print(isValidPath(child_node.assigned_robots[0].path,child_node.parent))
 			if child_node in closed_list:
 				continue
 			elif child_node in open_list:
