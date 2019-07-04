@@ -191,277 +191,6 @@ def visualize(config, saveName=None):
 	else:
 		plt.show()
 
-def solve_old(inputconfig):
-	solved_config = deepcopy(inputconfig)
-	class Node():
-		"""A node class for A* Pathfinding"""
-	
-		def __init__(self, parent=None, position=None):
-			self.parent = parent
-			self.position = position							#(x,y,theta,time)
-	
-			self.g = 0
-			self.h = 0
-			self.f = 0
-	
-		def __eq__(self, other):
-			return self.position == other.position
-
-		def __repr__(self):
-			return "Node(position={})".format(self.position)
-
-		def __hash__(self):
-			return hash(self.__repr__())
-
-		def __lt__(self, other):
-			return self.f < other.f
-	
-
-
-	
-
-	#Account for velocity, acceleration, turn radius, walls, actor location, and other robots paths. Use solved_config
-	def findPossiblePositions(node,solved_config,maze): 
-		# Make sure walkable terrain
-		maxAngle = 120
-		posArr = []
-		one_timestep = solved_config['solve']['time_resolution']
-		for xpoint in np.linspace(-1.75,1.75,1.75/solved_config['solve']['map_resolution'],endpoint=False):
-			for ypoint in np.linspace(-1.75,1.75,1.75/solved_config['solve']['map_resolution'],endpoint=False):
-				#print(xpoint,ypoint)
-				xpoint_map = int((xpoint + node.position[0]) * (len(maze[0])/solved_config['map']['width']))
-				ypoint_map = int((ypoint + node.position[1]) * (len(maze)/solved_config['map']['height']))
-				if xpoint == ypoint == 0:
-						continue
-				def findtheta(xdist,ydist):
-					if xdist == 0 and ydist > 0:
-						theta = pi/2
-					elif xdist ==0 and ydist < 0:
-						theta = 3*pi/2
-					else:
-						theta = atan(ydist/xdist)
-					return theta
-				if hasattr(node,'position') and hasattr(node.parent,'position'):
-					theta_dif = abs(findtheta(xpoint,ypoint) - findtheta(node.parent.position[0],node.parent.position[1]))
-					if theta_dif > radians(maxAngle):
-						#print(theta_dif)
-						continue
-				#if isnan(theta):
-				#	continue
-				if xpoint_map >= len(maze[0]) or ypoint_map >= len(maze):
-					continue
-				if maze[ypoint_map,xpoint_map]: #if the point is in an open space then use it 
-					#print(xpoint,ypoint)
-					posArr.append([xpoint + node.position[0],ypoint + node.position[1],[xpoint,ypoint],node.position[3] + solved_config['solve']['time_resolution']])
-		return posArr
-
-	#Account for euclidean distance of node from actor, using 0 for distances within distance range of either shot. Use solved_config for actor
-	def hueristic(node,solved_config,end_time,scaling): #dist from actor
-		node_xy = node.position[0:2]
-		node_time = node.position[3]
-		actor_xy,slope = findPointOnPathAndSlope(solved_config['actor']['path'],node_time)
-		dist_from_actor = hypot(node_xy[0] - actor_xy[0],node_xy[1] - actor_xy[1])
-		time_to_end = end_time - node.position[3]
-		if dist_from_actor<=2:
-			dist_from_actor = 0
-		#print(dist_from_actor,time_to_end)
-		return (time_to_end*2 + dist_from_actor*scaling[0] + solved_config['solve']['time_resolution']) #Now non-Admissable
-
-	#Account for distance from obsticles, keeping actor in center of viewing area, possibly maintaining constant acceleration.
-		#Use solved_config for actor location and viewing area.
-	def lossFunction(node,solved_config,scaling):
-		not_catching_shot_loss = 1000
-
-		loss = solved_config['solve']['time_resolution'] #loss to move 1 positon in one time step
-
-		x,y = round(node.position[0],10),round(node.position[1],10)
-		actor_xy,actor_slope = findPointOnPathAndSlope(solved_config['actor']['path'],node.position[3])
-		node_vect_theta = node.position[2] #[cos(node.position[2]),sin(node.position[2])]
-		node_cam_dir = rotate([0,0],node_vect_theta,solved_config['robots'][0]['camera_orientation'])			#change for more than one robot
-		length = hypot(node_cam_dir[0],node_cam_dir[1])
-		node_cam_dir = [node_cam_dir[0]/length,node_cam_dir[1]/length]
-
-		#Add loss for not staying constant accel
-		parent_node_length = hypot(node.parent.position[2][0],node.parent.position[2][1])
-		difference = abs(parent_node_length - length) #Camera length is same as robot length
-		loss += difference
-
-
-
-		#Add loss for actor outside of viewing area of robot
-		# for shot in solved_config['shots']:
-		# 	if shot['start_time'] <= node.position[3] <= shot['end_time']:
-		# 		shotarr = findShotPolygon([x,y],shot,node_cam_dir)
-		# 		pathObject = mplpath.Path(shotarr)
-		# 		insidePoly = pathObject.contains_points([actor_xy[0:2]])
-		# 		if insidePoly:
-		# 			center_polygon = [node_cam_dir[0]*(shot['dist_range'][1] - shot['dist_range'][0]),node_cam_dir[1]*(shot['dist_range'][1] - shot['dist_range'][0])]
-		# 			center_polygon = [center_polygon[0] + x, center_polygon[1] + x]
-		# 			dist_from_center = hypot(center_polygon[0] - actor_xy[0], center_polygon[1] - actor_xy[1])
-		# 			#print(loss)
-		# 			#if not dist_from_actor < (.1 * (shot['dist_range'][1] - shot['dist_range'][0])):
-		# 			loss += dist_from_center*scaling[0] + solved_config['solve']['time_resolution']
-		# 			#print(loss)																			#change , magic number
-		# 		#	length = hypot(node.position[0] - node.parent.position[0],node.position[1] - node.parent.position[1])
-		# 		#	print(node_cam_dir,[(node.position[0]-node.parent.position[0])/length,(node.position[1]-node.parent.position[1])/length])
-		# 		if not insidePoly:
-		# 			loss += not_catching_shot_loss
-		# 			#print("not Inside")
-		#print(node.position[3],loss)
-		#if loss < 0:
-		#	print(loss)
-		return loss
-
-
-	def astar(maze, start, solved_config):
-		"""Returns a list of tuples as a path from the given start to the given end in the given maze"""
-	
-		# Create start and end node
-		start_node = Node(None, start)
-		start_node.g = start_node.h = start_node.f = 0
-		#end_node = Node(None, end)
-		#end_node.g = end_node.h = end_node.f = 0
-	
-		# Initialize both open and closed list
-		open_list = []
-		heapq.heapify(open_list)
-		open_list_dict = {}
-
-		closed_list = set(())
-		end_time = solved_config['actor']['path'][len(solved_config['actor']['path'])-1][2]
-	
-		# Add the start node
-		#open_list.append(start_node)
-		#open_list.push(start_node)
-		heapq.heappush(open_list, start_node)
-		open_list_dict[start_node] = []
-		heapq.heappush(open_list_dict[start_node],start_node.g)
-		#open_list_set.add(start_node)
-	
-		# Loop until you find the end
-		told = time.time()
-		itts = 0
-		scaling = [(1/hypot(solved_config['map']['height'],solved_config['map']['width'])),end_time/(end_time+1)]
-		while len(open_list) > 0:
-	
-			# Get the current node
-			current_node = heapq.heappop(open_list)
-			open_list_dict.pop(current_node,None)
-
-			if tuple([current_node.position[0],current_node.position[1],tuple(current_node.position[2]),current_node.position[3]]) in closed_list:
-				continue
-			current_index = 0
-			#tmpNode = open_list_set.
-			#for index, item in enumerate(open_list):
-			#	#print(item.f)
-			#	if item.f < current_node.f:
-			#		current_node = item
-			#		current_index = index
-			#print(current_index)
-			tnew = time.time()
-			itts +=1
-			if tnew-told > .5:
-				print("x = {:<15}y = {:<15}theta = {:>15},{:<15}time = {:<15}g = {:<15}h = {:<15}f = {:<15}itt = {}".format(current_node.position[0],current_node.position[1],current_node.position[2][0],current_node.position[2][1],current_node.position[3], current_node.g, current_node.h,current_node.f,itts))
-				told = tnew
-				itts = 0
-			# Pop current off open list, add to closed list
-			#open_list.pop(current_index)
-			#open_list_set.remove(current_node)
-			closed_list.add(tuple([current_node.position[0],current_node.position[1],tuple(current_node.position[2]),current_node.position[3]]))
-
-			
-	
-			# Found the goal - the time has ended
-			if current_node.position[3] >= end_time:	#changed
-				path = []
-				current = current_node
-				while current is not None:
-					#print(type(current.position[0]))
-					path.append([float(current.position[0]),float(current.position[1]),float(current.position[3])])
-					current = current.parent
-				return path[::-1] # Return reversed path
-	
-			# Generate children
-			children = []
-			allPositions = findPossiblePositions(current_node,solved_config,maze)
-			#print(allPositions)
-			#input()
-			for new_position in allPositions: # Adjacent squares	 #changed
-	
-				# Get node position
-				#node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1], current_node.position[2] + new_position[3],current_node.position[3] + new_position[3])		#changed
-				node_position = new_position
-				# Make sure within range - handled by findPossiblePositions()
-				#if node_position[0] > (len(maze) - 1) or node_position[0] < 0 or node_position[1] > (len(maze[len(maze)-1]) -1) or node_position[1] < 0:
-				#	continue
-	
-				# Create new node
-				new_node = Node(current_node, node_position)
-	
-				# Append
-				children.append(new_node)
-	
-			# Loop through children
-			for child in children:
-	
-				# Child is on the closed list
-				#for closed_child in closed_list:
-				#	if child == closed_child:
-				#		continue
-				if tuple([child.position[0],child.position[1],tuple(child.position[2]),child.position[3]]) in closed_list:
-					continue
-
-
-				child.position = [round(child.position[0],10),round(child.position[1],10),child.position[2],round(child.position[3],10)]
-				# Create the f, g, and h values
-				child.g = round(current_node.g + lossFunction(child,solved_config,scaling),10)									#changed
-				child.h = round(hueristic(child,solved_config,end_time,scaling),10)												#changed
-				child.f = round(child.g + child.h,10)
-				if child.f < 0 or child.g < 0 or child.h < 0:
-					print(child.g, child.h, child.f)
-				#if child.g > 10000:																						#debug
-				#	child.g = 10000
-	
-					# Child is already in the open list
-					#for open_node in open_list:
-					#	if child == open_node and child.g > open_node.g:
-					#		continue
-
-				if child in open_list_dict:
-					if child.g >= open_list_dict[child]:
-						continue
-				else:
-					open_list_dict[child] = []
-
-					#if child in open_list_set:
-					#	pass
-	
-				# Add the child to the open list
-					#index = binarySearch(open_list,child.f)
-					#open_list.insert(index[1],child)
-
-				open_list_dict[child] = child.g
-				if child.g < 1000:
-					heapq.heappush(open_list, child)
-				
-
-				#print(open_list_dict)
-		#If no solution found print that
-		print('No Solution Found')
-
-	maze = imageio.imread(config['map']['path'])
-
-	print(maze[50])
-	start = [5, 7, [1,0], 0]
-
-	#path = astar(maze, start, solved_config)
-	solved_config['robots'][0]['path'] = astar(maze, start, solved_config)
-	#print(path)
-	#for element in solved_config['robots']:
-	#	element['path'] = [[54,237,0],[85,185,5],[100,85,7],[95,65,8]]
-	#solved_config['robots'][0]['path'] = [[5,24,0],[6,20,1],[10,18,2],[12,15,3],[16,14,3.5],[19,5,5],[22,7,6],[20,10,7],[17,11,7.78],[17,13,8],[21,15,9],[29,14,9.78],[30,13,10],[35,5,11]]
-	#solved_config['robots'][1]['path'] = [[6,24,0],[5,22,1.1],[9,18,1],[9,15,2],[16,14,3],[17,5,4],[22,5,5],[22,9,6],[17,12,7],[18,15,8],[28,14,9],[33,7,10],[34,7,12]]
-	return solved_config
 
 
 def solve(inputconfig):
@@ -473,19 +202,22 @@ def solve(inputconfig):
 
 	def isValidPath(path,node):
 		current = node
+		if len(path[0]) == 4:
+			path = [[element[0],element[1],element[3]] for element in path]
 		while current != None:
 			for robot in current.assigned_robots:
 				if type(robot.given_shot) == dict and len(robot.path) > 0:
 					for roboPos in robot.path:
-						fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)
-						pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
-						insidePoly = mplpath.Path(fovPoly).contains_points(pathPos[0:2])
-						if insidePoly[0]:
-							return False
+						if path[0][2] <= roboPos[3] <= path[-1][2]: #Only check robo positions that are within the time bounds of the path your checking
+							fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)[0]
+							pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
+							insidePoly = mplpath.Path(fovPoly).contains_points([pathPos[0:2]])
+							if insidePoly[0]:
+								return False
 			current = current.parent
 		return True
 	
-	def findPathAndCost(robot_cfg, current_position, shot):
+	def findPathAndCost(robot_cfg, current_position, shot,parent_node):
 		if shot is None:
 			return [],0
 		elif shot == 'finished':
@@ -512,6 +244,8 @@ def solve(inputconfig):
 			else:
 				path_sampled[pos] = list(path_sampled[pos])
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
+
+		test = isValidPath(path_sampled,parent_node)
 
 		#Add cost to go for traveling too fast on dubins path
 		#if len(path_sampled)>1:
@@ -564,12 +298,12 @@ def solve(inputconfig):
 
 	class Robot():
 
-		def __init__(self, identity, position ,given_shot = None):
+		def __init__(self, identity, position ,given_shot = None,parent_node = None):
 			self.position = position
 			self.identity = identity
 			self.robot_cfg = solved_config['robots'][identity]
 			self.given_shot = given_shot
-			self.path, self.cost_to_go = findPathAndCost(self.robot_cfg,position,given_shot)
+			self.path, self.cost_to_go = findPathAndCost(self.robot_cfg,position,given_shot,parent_node)
 			if given_shot is None:
 				self.end_position = position
 			elif given_shot == 'finished':
@@ -627,9 +361,9 @@ def solve(inputconfig):
 					shot = perm[0]
 					robot = unassigned_robots[0]
 					if type(shot) == dict and robot.end_position[3] > shot['start_time']:
-						robot_list.append(Robot(robot.identity,robot.end_position,None))
+						robot_list.append(Robot(robot.identity,robot.end_position,None,self))
 					else:
-						robot_list.append(Robot(robot.identity,robot.end_position,shot))
+						robot_list.append(Robot(robot.identity,robot.end_position,shot,self))
 						unassigned_shots.remove(shot)
 					unassigned_robots.remove(robot)
 
@@ -689,7 +423,8 @@ def solve(inputconfig):
 		def __eq__(self, other):
 			return self.__hash__() == other.__hash__()
 
-	
+	startTime = time.process_time()
+
 	#A* algorithm
 	#Initialize lists/heaps/dictionaries and endtime
 	open_list = []
@@ -702,7 +437,7 @@ def solve(inputconfig):
 	startRobotList = []
 	for robotNumber,robot in enumerate(solved_config['robots']):
 		robot['start_coord'].append(0)
-		startRobotList.append(Robot(robotNumber,robot['start_coord'],None))
+		startRobotList.append(Robot(robotNumber,robot['start_coord'],None,None))
 
 	open_list.append(Node(startRobotList,solved_config['shots'],0,None))
 
@@ -720,8 +455,7 @@ def solve(inputconfig):
 		closed_list.add(current_node)
 
 
-		if current_node.time == end_time and len(current_node.available_shots) == 0: #and current_node.f<10000000: #If the node has reached the end time, then finish and return the paths
-			print('Solution Found')
+		if current_node.time == end_time and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
 			robot_paths = []
 			for robot in solved_config['robots']:
 				robot_paths.append([])
@@ -748,14 +482,16 @@ def solve(inputconfig):
 				if solved_config['robots'][robotNum]['path'] == []:
 					del solved_config['robots'][robotNum]['path']
 			#return with solution
+			print('Solution Found in {} seconds.'.format(time.process_time() - startTime))
 			return solved_config
 		
 		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
-			#if len(child_node.assigned_robots) > 0:
-			#	print(isValidPath(child_node.assigned_robots[0].path,child_node.parent))
-			if child_node in closed_list:
-				continue
-			elif child_node in open_list:
+			#if len(child_node.assigned_robots) > 0 and type(child_node.assigned_robots[0].path) == list and len(child_node.assigned_robots[0].path) > 0:
+			#	t0 = time.process_time()
+			#	valid = isValidPath(child_node.assigned_robots[0].path,child_node.parent)
+			#	t1 = time.process_time()
+			#	print(t1-t0,valid)
+			if child_node in closed_list or child_node in open_list:
 				continue
 			child_node.g = current_node.g + child_node.total_ctg
 			child_node.h = 0
@@ -788,7 +524,6 @@ def solve(inputconfig):
 config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],5))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
-#t0 = time.time()
 solved_config = solve(config)
 
 #fig, ax = plt.subplots(figsize=(100,100))
