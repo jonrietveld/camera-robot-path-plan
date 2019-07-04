@@ -56,7 +56,7 @@ def rotate(origin, point, angle_degrees):
 def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 	minShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][0]
 	maxShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][1]
-	angle_values = np.arange(shot['angle_range'][0], shot['angle_range'][1], 5)
+	angle_values = np.arange(shot['angle_range'][0] + shot['actor_facing'], shot['angle_range'][1] + shot['actor_facing'], 5) #points every 5 degrees
 	minShotVect = []
 	maxShotVect = []
 	for value in angle_values:
@@ -74,8 +74,9 @@ def findFovRays(roboSlope,robot_num,rotatePoint,shot = None):
 		if shot is None:
 			camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
 		else:
-			camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'] + (sum(shot['angle_range'])/2))
-		camDirection = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
+			camDirectionUnit = rotate([0,0],roboSlope,shot['actor_facing'] + 180)
+		camDirectionUnit = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)
+		camDirection = camDirectionUnit*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
 		fovSlopes = [rotate([0,0],camDirection,config['robots'][robot_num]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot_num]['fov']/2)]
 		
 		fov = config['robots'][robot_num]['fov']
@@ -288,24 +289,24 @@ def solve_old(inputconfig):
 
 
 		#Add loss for actor outside of viewing area of robot
-		for shot in solved_config['shots']:
-			if shot['start_time'] <= node.position[3] <= shot['end_time']:
-				shotarr = findShotPolygon([x,y],shot,node_cam_dir)
-				pathObject = mplpath.Path(shotarr)
-				insidePoly = pathObject.contains_points([actor_xy[0:2]])
-				if insidePoly:
-					center_polygon = [node_cam_dir[0]*(shot['dist_range'][1] - shot['dist_range'][0]),node_cam_dir[1]*(shot['dist_range'][1] - shot['dist_range'][0])]
-					center_polygon = [center_polygon[0] + x, center_polygon[1] + x]
-					dist_from_center = hypot(center_polygon[0] - actor_xy[0], center_polygon[1] - actor_xy[1])
-					#print(loss)
-					#if not dist_from_actor < (.1 * (shot['dist_range'][1] - shot['dist_range'][0])):
-					loss += dist_from_center*scaling[0] + solved_config['solve']['time_resolution']
-					#print(loss)																			#change , magic number
-				#	length = hypot(node.position[0] - node.parent.position[0],node.position[1] - node.parent.position[1])
-				#	print(node_cam_dir,[(node.position[0]-node.parent.position[0])/length,(node.position[1]-node.parent.position[1])/length])
-				if not insidePoly:
-					loss += not_catching_shot_loss
-					#print("not Inside")
+		# for shot in solved_config['shots']:
+		# 	if shot['start_time'] <= node.position[3] <= shot['end_time']:
+		# 		shotarr = findShotPolygon([x,y],shot,node_cam_dir)
+		# 		pathObject = mplpath.Path(shotarr)
+		# 		insidePoly = pathObject.contains_points([actor_xy[0:2]])
+		# 		if insidePoly:
+		# 			center_polygon = [node_cam_dir[0]*(shot['dist_range'][1] - shot['dist_range'][0]),node_cam_dir[1]*(shot['dist_range'][1] - shot['dist_range'][0])]
+		# 			center_polygon = [center_polygon[0] + x, center_polygon[1] + x]
+		# 			dist_from_center = hypot(center_polygon[0] - actor_xy[0], center_polygon[1] - actor_xy[1])
+		# 			#print(loss)
+		# 			#if not dist_from_actor < (.1 * (shot['dist_range'][1] - shot['dist_range'][0])):
+		# 			loss += dist_from_center*scaling[0] + solved_config['solve']['time_resolution']
+		# 			#print(loss)																			#change , magic number
+		# 		#	length = hypot(node.position[0] - node.parent.position[0],node.position[1] - node.parent.position[1])
+		# 		#	print(node_cam_dir,[(node.position[0]-node.parent.position[0])/length,(node.position[1]-node.parent.position[1])/length])
+		# 		if not insidePoly:
+		# 			loss += not_catching_shot_loss
+		# 			#print("not Inside")
 		#print(node.position[3],loss)
 		#if loss < 0:
 		#	print(loss)
@@ -492,7 +493,7 @@ def solve(inputconfig):
 
 		#calculate ctg from starting position to shot start
 		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
-		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 
 		#Find a path not obstructed by obsticles, and not obstructed by shots to the start of the shot.
@@ -528,7 +529,7 @@ def solve(inputconfig):
 			time_arr = np.append(time_arr,shot['end_time'])
 		for time in time_arr:
 			actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],time)
-			current_position = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2)),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+			current_position = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 			current_position = np.append(current_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 			current_position = np.append(current_position, time)
 			following_actor.append(current_position.tolist())
@@ -541,16 +542,16 @@ def solve(inputconfig):
 			#	cost_to_go += 500	#fix please
 
 		#Smooth out path for following actor
-		smoothingnum = 11
-		for itt in range(0,smoothingnum):
-			x = np.array([pathpoint[0] for pathpoint in following_actor])
-			y = np.array([pathpoint[1] for pathpoint in following_actor])
-			t = np.array([pathpoint[3] for pathpoint in following_actor])
-			#print(len(x),len(y))
-			window_size, poly_order = int(2.0/solved_config['solve']['time_resolution'])+1, 3
-			x_sg = savgol_filter(x, window_size, poly_order)
-			y_sg = savgol_filter(y, window_size, poly_order)
-			following_actor = [[x_sg[loc],y_sg[loc],following_actor[loc][2],following_actor[loc][3]] for loc in range(0,len(following_actor))]
+		#smoothingnum = 11
+		#for itt in range(0,smoothingnum):
+		#	x = np.array([pathpoint[0] for pathpoint in following_actor])
+		#	y = np.array([pathpoint[1] for pathpoint in following_actor])
+		#	t = np.array([pathpoint[3] for pathpoint in following_actor])
+		#	#print(len(x),len(y))
+		#	window_size, poly_order = int(2.0/solved_config['solve']['time_resolution'])+1, 3
+		#	x_sg = savgol_filter(x, window_size, poly_order)
+		#	y_sg = savgol_filter(y, window_size, poly_order)
+		#	following_actor = [[x_sg[loc],y_sg[loc],following_actor[loc][2],following_actor[loc][3]] for loc in range(0,len(following_actor))]
 
 		#Add cost to go for each segment in the path next to the actor in a given shot
 		#for loc in range(1,len(following_actor)):
