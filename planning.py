@@ -184,7 +184,7 @@ def visualize(config, saveName=None, show_path = False):
 			ax.add_patch(roboShot[len(roboShot)-1])
 		roboLocArr.append(pt)
 		segmentArr.append(segment)
-	ax.legend() 
+	ax.legend()
 	#Setup animation
 	if not config['actor']['path'] == None:
 		maxtime = max(config['actor']['path'],key=lambda x: x[2])
