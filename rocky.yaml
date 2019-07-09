@@ -53,7 +53,7 @@ robots:                                                   # robots
     length: 1                                             # Length of robot in meters
     width: .75                                            # Width of robot in meters
     max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [35,25,0]                                # starting coordinates of robot(s), can be "None"
+    start_coord: [35,25,3.14]                             # starting coordinates of robot(s), can be "None"
     fov: 50                                               # Field of view of robot camera in degrees
     camera_orientation: 180                               # Degrees from facing forward
     obstacle_dist: 0.25                                   # Min distance in meters robot can be from obstacle
