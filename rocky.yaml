@@ -1,33 +1,33 @@
 shots:
-  - start_time: 1 #Start time of the shot (seconds)
-    end_time: 4 #End time of the shot (seconds)
-    angle_range: [-15,15] #All allowed angles in the robots field of view (degrees)
-    dist_range: [3,5] #The range a person/actor may be from the robot (meters)
-    actor_facing: 0 #Number of degrees off the actor is from the direction the camera is facing
-  - start_time: 5 #Start time of the shot (seconds)
-    end_time: 8 #End time of the shot (seconds)
-    angle_range: [-35,-15] #All allowed angles in the robots field of view (degrees)
-    dist_range: [3,5] #The range a person/actor may be from the robot (meters)
-    actor_facing: 20 #Number of degrees off the actor is from the direction the camera is facing
-  - start_time: 2 #Start time of the shot (seconds)
-    end_time: 7 #End time of the shot (seconds)
-    angle_range: [-15,15] #All allowed angles in the robots field of view (degrees)
-    dist_range: [3,5] #The range a person/actor may be from the robot (meters)
-    actor_facing: -90 #Number of degrees off the actor is from the direction the camera is facing
+  - start_time: 1                                        # Start time of the shot (seconds)
+    end_time: 4                                          # End time of the shot (seconds)
+    angle_range: [-15,15]                                # All allowed angles in the robots field of view (degrees)
+    dist_range: [3,5]                                    # The range a person/actor may be from the robot (meters)
+    actor_facing: 0                                      # Number of degrees off the actor is from the direction the camera is facing
+  - start_time: 5                                        # Start time of the shot (seconds)
+    end_time: 8                                          # End time of the shot (seconds)
+    angle_range: [-25,-5]                                # All allowed angles in the robots field of view (degrees)
+    dist_range: [3,5]                                    # The range a person/actor may be from the robot (meters)
+    actor_facing: 20                                     # Number of degrees off the actor is from the direction the camera is facing
+  - start_time: 2                                        # Start time of the shot (seconds)
+    end_time: 7                                          # End time of the shot (seconds)
+    angle_range: [-15,15]                                # All allowed angles in the robots field of view (degrees)
+    dist_range: [3,5]                                    # The range a person/actor may be from the robot (meters)
+    actor_facing: -90                                    # Number of degrees off the actor is from the direction the camera is facing
 
 actor:
-  path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]] #[5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8]] #,[18,15,9]] #,[28,14,10],[33,7,11]]      [[2,15,0],[35,15,4]] #Path an actor will follow
+  path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]]        # [5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8]]                                                    # ,[18,15,9]]                                                   # ,[28,14,10],[33,7,11]]      [[2,15,0],[35,15,4]]                                                    # Path an actor will follow
   color: 'red'
 
 animation:
-  fps: 30 #Number of frames per second for animation - Does not effect solving time
+  fps: 30                                                # Number of frames per second for animation - Does not effect solving time
   in_shot: 'red'
   out_shot: 'blue'
 
 map:
-  path: white.png #filename or directory name of the obsticle map
-  height: 30 #Height in meters of the height of the png file (giving scale for png file)
-  width: 40 #Width in meters of the width of the png file (giving scale for png file)
+  path: white.png                                         # filename or directory name of the obsticle map
+  height: 30                                              # Height in meters of the height of the png file (giving scale for png file)
+  width: 40                                               # Width in meters of the width of the png file (giving scale for png file)
 
 solve:
   map_resolution: .1                                      # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
@@ -35,31 +35,19 @@ solve:
   algorithm: 'dubins'                                     # Can be 'dubins' or 'reeds_shepp'
   PRM_timeout: 10                                         # Number of seconds before the PRM algorithm will admit defeat
 
-
-robots: #robots
-  - speed: 5 #Speed in meters per second
-    accel: 3 #Acceleration in meters per second per second
-    length: 1 #Length of robot in meters
-    width: .75 #Width of robot in meters
-    max_turn_rad: 4 #The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [0,0,0] #starting coordinates of robot(s), can be "None"
-    fov: 70 #Field of view of robot camera in degrees
-    camera_orientation: 180 #Degrees from facing forward
-    obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
+robots:                                                   # robots
+  - speed: 5                                              # Speed in meters per second
+    accel: 3                                              # Acceleration in meters per second per second
+    length: 1                                             # Length of robot in meters
+    width: .75                                            # Width of robot in meters
+    max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    start_coord: [0,0,0]                                  # Starting coordinates of robot(s), can be "None"
+    fov: 70                                               # Field of view of robot camera in degrees
+    camera_orientation: 180                               # Degrees from facing forward
+    obstacle_dist: 0.25                                   # Min distance in meters robot can be from obstacle
     color: 'green' 
-    path: [[11,27,0],[10.125,15,1],[22.5,15,4],[34,6,8]]
+                                                          #path: [[11,27,0],[10.125,15,1],[22.5,15,4],[34,6,8]]
 
-<<<<<<< HEAD
-  - speed: 5 #Speed in meters per second
-    accel: 3 #Acceleration in meters per second per second
-    length: 1 #Length of robot in meters
-    width: .75 #Width of robot in meters
-    max_turn_rad: 4 #The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [35,25,0] #starting coordinates of robot(s), can be "None"
-    fov: 50 #Field of view of robot camera in degrees
-    camera_orientation: 180 #Degrees from facing forward
-    obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
-=======
   - speed: 5                                              # Speed in meters per second
     accel: 3                                              # Acceleration in meters per second per second
     length: 1                                             # Length of robot in meters
@@ -69,6 +57,5 @@ robots: #robots
     fov: 50                                               # Field of view of robot camera in degrees
     camera_orientation: 180                               # Degrees from facing forward
     obstacle_dist: 0.25                                   # Min distance in meters robot can be from obstacle
->>>>>>> parent of 8e8a032... Nonworking slope modification
     color: 'magenta'
-    path: [[15,19,0],[22.625,19,4],[35,19,8]]
+                                                          #path: [[15,19,0],[22.625,19,4],[35,19,8]]
