@@ -15,7 +15,9 @@ from copy import *
 import heapq
 import time
 import dubins
+import reeds_shepp
 import itertools
+import random
 
 '''Shared functions'''
 #######################################################################################################################
@@ -100,7 +102,7 @@ def findFovRays(roboSlope,robot_num,rotatePoint,shot = None):
 		return fovFillArr,camDirectionUnit
 #######################################################################################################################
 
-def visualize(config, saveName=None):
+def visualize(config, saveName=None, show_path = False):
 				
 	#update animation
 	def update(i):
@@ -151,6 +153,14 @@ def visualize(config, saveName=None):
 
 	
 	print('Visualizing')
+	if show_path:
+		fig1, ax1 = plt.subplots()
+		for identity,robot in enumerate(solved_config['robots']):
+			if 'path' in robot:
+				x = np.array([pathpoint[0] for pathpoint in robot['path']])
+				y = np.array([pathpoint[1] for pathpoint in robot['path']])
+				ax1.plot(x, y, label= "Robot {}".format(identity))
+		ax1.legend()
 	#read image and create plot
 	img1 = imageio.imread(config['map']['path'])
 	fig, ax = plt.subplots()
@@ -162,9 +172,10 @@ def visualize(config, saveName=None):
 	segmentArr = []
 	fovFill = []
 	roboShot = []
-	for robot in config['robots']:
+	actorPt, = ax.plot(0,0,marker='o',c=config['actor']['color'],label = 'Actor')
+	for identity,robot in enumerate(config['robots']):
 		segment, = ax.plot([],[],c=(0,0,0,.5))
-		pt, = ax.plot([],[],marker='o',c=robot['color'])
+		pt, = ax.plot([],[],marker='o',c=robot['color'], label = 'Robot {}'.format(identity))
 		fovFill.append(patches.Polygon([[0,0],[0,0],[0,0]],closed=True, alpha=.25, fc=robot['color'], ec='None'))
 		ax.add_patch(fovFill[len(fovFill)-1])
 		for configShot in config['shots']:
@@ -174,8 +185,7 @@ def visualize(config, saveName=None):
 			ax.add_patch(roboShot[len(roboShot)-1])
 		roboLocArr.append(pt)
 		segmentArr.append(segment)
-	actorPt, = ax.plot(0,0,marker='o',c=config['actor']['color'])
-
+	ax.legend()
 	#Setup animation
 	if not config['actor']['path'] == None:
 		maxtime = max(config['actor']['path'],key=lambda x: x[2])
@@ -192,48 +202,139 @@ def visualize(config, saveName=None):
 		plt.show()
 
 
-
 def solve(inputconfig):
 	solved_config = deepcopy(inputconfig)
 	solve_resolution = solved_config['solve']['map_resolution']
 
-	def findPathToShot(current_position,shot_start_loc,robot_cfg):
-		return dubins.shortest_path(current_position[0:3], shot_start_loc, robot_cfg['max_turn_rad'])
+	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
+		PRM_num_points = 200
 
-	def isValidPath(path,node):
-		current = node
-		if len(path[0]) == 4:
-			path = [[element[0],element[1],element[3]] for element in path]
-		while current != None:
-			for robot in current.assigned_robots:
-				if type(robot.given_shot) == dict and len(robot.path) > 0:
-					for roboPos in robot.path:
-						if path[0][2] <= roboPos[3] <= path[-1][2]: #Only check robo positions that are within the time bounds of the path your checking
-							fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)[0]
-							pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
-							insidePoly = mplpath.Path(fovPoly).contains_points([pathPos[0:2]])
-							if insidePoly[0]:
-								return False
-			current = current.parent
-		return True
-	
-	def findPathAndCost(robot_cfg, current_position, shot,parent_node):
-		if shot is None:
-			return [],0
-		elif shot == 'finished':
-			return [],0
+		def isValidPath(path,node):
+			current = node
+			if len(path[0]) == 4:
+				path = [[element[0],element[1],element[3]] for element in path]
+			while current != None:
+				for robot in current.assigned_robots:
+					if type(robot.given_shot) == dict and len(robot.path) > 0:
+						for roboPos in robot.path:
+							if path[0][2] <= roboPos[3] <= path[-1][2]: #Only check robo positions that are within the time bounds of the path your checking
+								fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)[0]
+								pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
+								insidePoly = mplpath.Path(fovPoly).contains_points([pathPos[0:2]])
+								if insidePoly[0]:
+									return False
+				current = current.parent
+			return True
 
-		#calculate ctg from starting position to shot start
-		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
-		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
-		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
+		def PRM_Modified(point_array,start,goal):
+			aStar_Timeout = 1 #seconds
+			class astar_node():
+				"""docstring for astar_node"""
+				def __init__(self, node_position, g = 0, parent = None):
+					self.node_position = node_position
+					self.parent = parent
+					self.g = g
+					self.h = 0
+					self.f = 0
 
-		#Find a path not obstructed by obsticles, and not obstructed by shots to the start of the shot.
-		path = findPathToShot(current_position,shot_start_loc,robot_cfg)
+				def __lt__(self, other):
+					return self.f < other.f
 
-		path_sampled = path.sample_many(solve_resolution)
-		path_sampled = path_sampled[0]
-		cost_to_go = 1*solve_resolution*len(path_sampled)
+				def __hash__(self):
+					return hash("astar_node({})".format(self.node_position))
+			
+				#def __eq__(self, other):
+				#	return self.__hash__() == other.__hash__()
+		
+				def findChildren(self,directed_graph):
+					node_list_prm =[]
+					for vertex in directed_graph[tuple(self.node_position)]:
+						node_list_prm.append(astar_node(vertex[1],vertex[0],self))
+					return node_list_prm
+					
+			point_array.append(goal)
+			#Create a dictionary of points which have as indices all the points they connect to with the path length
+			directed_graph = {}
+			for current_point in point_array:
+				node_list_prm = []
+				# Don't look for node past the goal node.
+				if tuple(current_point) == tuple(goal):
+					continue
+				for dest_point in point_array:
+					reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
+					node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+				directed_graph[tuple(current_point)] = tuple(node_list_prm)
+			#Then do the same for the starting node.
+			node_list_prm = []
+			for dest_point in point_array:
+				reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
+				node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+			directed_graph[tuple(start)] = tuple(node_list_prm)
+			
+
+
+			# Run A* on the connected points to find the lowest path length that will produce a usable path
+			open_list_prm = []
+			closed_list_prm = set(())
+			open_list_dict_prm = {}
+			# Append Starting node, and run A*
+			open_list_prm.append(astar_node(start))
+			timeout = time.process_time()
+			while len(open_list_prm) > 0 and time.process_time() - timeout < aStar_Timeout:
+				print('starting')
+				current_node_prm = heapq.heappop(open_list_prm)
+				closed_list.add(current_node_prm)
+
+				if tuple(current_node_prm.node_position) == tuple(goal):
+					print('possible solution',current_node_prm.parent.node_position, current_node_prm.node_position)
+					path = []
+					current = current_node_prm
+					while current.parent is not None:
+						reeds_shepp_path = reeds_shepp.path_sample(current.parent.node_position,list(current.node_position),robot_cfg['max_turn_rad'],solve_resolution)
+						path += reeds_shepp_path[::-1]
+						current = current.parent
+					# Flip path to face forwards
+					path = path[::-1]
+					print(path)
+					#Add timestamps for the path
+					timestep_increment = (shot['start_time']-current_position[3])/len(path)
+					for pos in range(len(path)):
+						if (pos+1)*timestep_increment + current_position[3] == shot['start_time']:
+							del path[pos]
+							continue
+						else:
+							path[pos] = list(path[pos])
+							path[pos].append((pos+1)*timestep_increment+current_position[3])
+					if isValidPath(path,parent_node):
+						return path
+					else:
+						continue
+						
+				for child_node_prm in current_node_prm.findChildren(directed_graph): #For each of the children, find if it needs to be added to open_list, and do necessary
+					if child_node_prm in closed_list:
+						continue
+					child_node_prm.g = current_node_prm.g + child_node_prm.g
+					child_node_prm.h = hypot(child_node_prm.node_position[0] - goal[0],child_node_prm.node_position[1] - goal[1])
+					child_node_prm.f = child_node_prm.g + child_node_prm.h
+					if child_node_prm in open_list_dict_prm:
+						if child_node_prm.g >= open_list_dict_prm[child_node_prm]:
+							continue
+					open_list_dict_prm[child_node_prm] = child_node_prm.g
+					heapq.heappush(open_list_prm, child_node_prm)
+				print('looping')
+			#If no solution is found by A* return -1
+			return -1
+
+
+		#Check if endpoints are not in another shot
+		path = [current_position,shot_start_loc]
+		if not isValidPath(path,parent_node):
+			print('Shots overlap, or shot starts or ends on an obsticles. Please check your shot parameters.')
+			return [],-1
+
+		#Check if a direct dubins path is valid, and if it is, just return that path
+		path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
+		path_sampled = path.sample_many(solve_resolution)[0]
 
 		#Add on timesteps to dubens path
 		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
@@ -245,7 +346,46 @@ def solve(inputconfig):
 				path_sampled[pos] = list(path_sampled[pos])
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
 
-		test = isValidPath(path_sampled,parent_node)
+		cost_to_go = 1*solve_resolution*len(path_sampled)
+		if isValidPath(path_sampled,parent_node):
+			return path_sampled,cost_to_go
+		print('dubins in frame or passes through obsticles')
+		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
+		rand_point_arr = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
+		#print(rand_point_arr)
+		
+		print('running')
+		path_sampled = PRM_Modified(rand_point_arr,current_position[0:3], shot_start_loc[0:3])
+		print('finished')
+		#If PRM failed, just return nothing
+		if path_sampled == -1:
+			return [],-1
+		cost_to_go = 1*solve_resolution*len(path_sampled)
+		
+		
+
+		return path_sampled,cost_to_go
+
+	
+	def findPathAndCost(robot_cfg, current_position, shot,parent_node):
+		if shot is None:
+			return [],0
+		elif shot == 'finished':
+			return [],0
+
+		#calculate ctg from starting position to shot start
+		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(solved_config['actor']['path'],shot['start_time'])
+		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
+		shot_start_loc = np.append(shot_start_loc, shot['start_time'])
+
+
+		#Find a path not obstructed by obsticles, and not obstructed by shots to the start of the shot.
+		path_sampled,cost_to_go = findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot)
+		if cost_to_go == -1:
+			return [],-1
+
+		
 
 		#Add cost to go for traveling too fast on dubins path
 		#if len(path_sampled)>1:
@@ -304,12 +444,13 @@ def solve(inputconfig):
 			self.robot_cfg = solved_config['robots'][identity]
 			self.given_shot = given_shot
 			self.path, self.cost_to_go = findPathAndCost(self.robot_cfg,position,given_shot,parent_node)
-			if given_shot is None:
-				self.end_position = position
-			elif given_shot == 'finished':
-				self.end_position = position
-			else:
-				self.end_position = self.path[-1]										#(x,y,theta,time)
+			if self.cost_to_go != -1:
+				if given_shot is None:
+					self.end_position = position
+				elif given_shot == 'finished':
+					self.end_position = position
+				else:
+					self.end_position = self.path[-1]										#(x,y,theta,time)
 
 		def __hash__(self):
 			return hash("Node({}{}{})".format(self.identity,self.position,self.given_shot))
@@ -336,6 +477,8 @@ def solve(inputconfig):
 				else:
 					self.assigned_robots.append(robot)
 			self.total_ctg = sum([0]+[robot.cost_to_go for robot in self.assigned_robots if parent == None or (parent != None and robot in parent.unassigned_robots)])
+			if parent is not None:
+				self.total_ctg += parent.total_ctg
 
 		def findChildren(self):
 
@@ -361,10 +504,13 @@ def solve(inputconfig):
 					shot = perm[0]
 					robot = unassigned_robots[0]
 					if type(shot) == dict and robot.end_position[3] > shot['start_time']:
-						robot_list.append(Robot(robot.identity,robot.end_position,None,self))
+						new_robot = Robot(robot.identity,robot.end_position,None,self)
 					else:
-						robot_list.append(Robot(robot.identity,robot.end_position,shot,self))
+						new_robot = Robot(robot.identity,robot.end_position,shot,self)
 						unassigned_shots.remove(shot)
+					if new_robot.cost_to_go == -1:
+						continue
+					robot_list.append(new_robot)
 					unassigned_robots.remove(robot)
 
 					for robot in unassigned_robots:
@@ -449,7 +595,7 @@ def solve(inputconfig):
 		#	for robot in node.unassigned_robots:
 		#		print('robot:',robot.identity, robot.given_shot)
 		#	for robot in node.assigned_robots:
-		#		print('robot:',robot.identity, robot.given_shot)
+		#		print('robot:',robot.identity, robot.given_shot,robot.cost_to_go)
 		#Remove one node from the heap and add it to the closed_list
 		current_node = heapq.heappop(open_list)
 		closed_list.add(current_node)
@@ -486,11 +632,6 @@ def solve(inputconfig):
 			return solved_config
 		
 		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
-			#if len(child_node.assigned_robots) > 0 and type(child_node.assigned_robots[0].path) == list and len(child_node.assigned_robots[0].path) > 0:
-			#	t0 = time.process_time()
-			#	valid = isValidPath(child_node.assigned_robots[0].path,child_node.parent)
-			#	t1 = time.process_time()
-			#	print(t1-t0,valid)
 			if child_node in closed_list or child_node in open_list:
 				continue
 			child_node.g = current_node.g + child_node.total_ctg
@@ -513,8 +654,6 @@ def solve(inputconfig):
 	#If no solution found print that
 	print('No Solution Found, check your starting positions, speeds, shots, and robots.')
 	return solved_config
-		
-			
 
 
 
@@ -525,33 +664,12 @@ config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],5))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
 solved_config = solve(config)
-
-#fig, ax = plt.subplots(figsize=(100,100))
-#for robot in solved_config['robots']:
-#	if 'path' in robot:
-#		x = np.array([pathpoint[0] for pathpoint in robot['path']])
-#		y = np.array([pathpoint[1] for pathpoint in robot['path']])
-#		t = np.array([pathpoint[2] for pathpoint in robot['path']])
-#		window_size, poly_order = 7, 3
-#		x_sg = savgol_filter(x, window_size, poly_order)
-#		y_sg = savgol_filter(y, window_size, poly_order)
-#		ax.plot(x, y, 'k', label= "Smoothed curve")
-#		#print(xx,yy_sg)
-#plt.show()
-
-#tmpvar = [element[0:2] + [element[3]] for element in tmpvar]
-#tmpvar.sort(key=lambda position: position[2])
-#config['robots'][0]['path'] = tmpvar
-#config['robots'][1]['path'] = None
-#print(config['robots'][0]['path'])
-#t1 = time.time()
-#print("Total time: {}".format(t1-t0))
 #with open('result.yaml', 'w') as yaml_file:
 #	yaml.dump(solved_config, yaml_file, default_flow_style=False)
 #visualize(solved_config)
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
 #config = yaml.safe_load(open('result_working2.yaml', 'r'))
-visualize(solved_config)
+visualize(solved_config,show_path=True)
 #config = yaml.safe_load(open('result.yaml', 'r'))
 #visualize(config,'demo.gif')
