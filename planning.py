@@ -117,9 +117,9 @@ def visualize(config, saveName=None, show_path = False):
 				if 'path' in config['robots'][robot]:
 					if not config['robots'][robot]['path'] == None:
 						ptOnPath,slope = findPointOnPathAndSlope(config['robots'][robot]['path'],(1.0/config['animation']['fps'])*i)
-						print(ptOnPath,config['robots'][robot]['path'])
-						if atan2(slope[1],slope[0]) != ptOnPath[3]:
-							slope = [-slope[0],-slope[1]]
+						#print(ptOnPath,slope,atan2(slope[1],slope[0]),atan2(slope[1],slope[0]) - ptOnPath[3])
+						#if -0.001 > atan2(slope[1],slope[0]) - ptOnPath[3] or atan2(slope[1],slope[0]) - ptOnPath[3] > 0.001:
+						#	slope = [-slope[0],-slope[1]]
 						fovRays,camDirectionUnit = findFovRays(slope,robot,ptOnPath)
 						fovFill[robot].set_xy(fovRays)
 						roboLocArr[robot].set_data(ptOnPath[0],ptOnPath[1])
@@ -164,7 +164,7 @@ def visualize(config, saveName=None, show_path = False):
 				x = np.array([pathpoint[0] for pathpoint in robot['path']])
 				y = np.array([pathpoint[1] for pathpoint in robot['path']])
 				ax1.plot(x, y, label= "Robot {}".format(identity))
-		ax1.legend()
+		ax1.legend(loc = 'upper right')
 	#read image and create plot
 	img1 = imageio.imread(config['map']['path'])
 	fig, ax = plt.subplots()
@@ -189,7 +189,7 @@ def visualize(config, saveName=None, show_path = False):
 			ax.add_patch(roboShot[len(roboShot)-1])
 		roboLocArr.append(pt)
 		segmentArr.append(segment)
-	ax.legend()
+	ax.legend(loc = 'upper right')
 	#Setup animation
 	if not config['actor']['path'] == None:
 		maxtime = max(config['actor']['path'],key=lambda x: x[2])
