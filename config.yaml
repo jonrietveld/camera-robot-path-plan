@@ -25,7 +25,6 @@ map:
 solve:
   map_resolution: .5 #Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
   time_resolution: .2 #Number of seconds to count as one time step - linearly effects runtime of code
-  algorithm: 'reeds_shepp' #Can be 'dubins' or 'reeds_shepp'
 
 robots: #robots
   - speed: 5 #Speed in meters per second
