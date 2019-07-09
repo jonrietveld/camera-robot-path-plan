@@ -30,20 +30,11 @@ map:
   width: 40 #Width in meters of the width of the png file (giving scale for png file)
 
 solve:
-<<<<<<< HEAD
-<<<<<<< HEAD
   map_resolution: .1                                      # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
   time_resolution: .1                                     # Number of seconds to count as one time step - linearly effects runtime of code
   algorithm: 'dubins'                                     # Can be 'dubins' or 'reeds_shepp'
   PRM_timeout: 10                                         # Number of seconds before the PRM algorithm will admit defeat
-=======
-  map_resolution: .1 #Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
-  time_resolution: .1 #Number of seconds to count as one time step - linearly effects runtime of code
->>>>>>> parent of aaf72ab... Working PRM
-=======
-  map_resolution: .1 #Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
-  time_resolution: .1 #Number of seconds to count as one time step - linearly effects runtime of code
->>>>>>> parent of aaf72ab... Working PRM
+
 
 robots: #robots
   - speed: 5 #Speed in meters per second
@@ -59,19 +50,6 @@ robots: #robots
     path: [[11,27,0],[10.125,15,1],[22.5,15,4],[34,6,8]]
 
 <<<<<<< HEAD
-<<<<<<< HEAD
-  - speed: 5                                              # Speed in meters per second
-    accel: 3                                              # Acceleration in meters per second per second
-    length: 1                                             # Length of robot in meters
-    width: .75                                            # Width of robot in meters
-    max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [35,25,0]                             # starting coordinates of robot(s), can be "None"
-    fov: 50                                               # Field of view of robot camera in degrees
-    camera_orientation: 180                               # Degrees from facing forward
-    obstacle_dist: 0.25                                   # Min distance in meters robot can be from obstacle
-=======
-=======
->>>>>>> parent of aaf72ab... Working PRM
   - speed: 5 #Speed in meters per second
     accel: 3 #Acceleration in meters per second per second
     length: 1 #Length of robot in meters
@@ -81,9 +59,16 @@ robots: #robots
     fov: 50 #Field of view of robot camera in degrees
     camera_orientation: 180 #Degrees from facing forward
     obstacle_dist: 0.25 #Min distance in meters robot can be from obstacle
-<<<<<<< HEAD
->>>>>>> parent of aaf72ab... Working PRM
 =======
->>>>>>> parent of aaf72ab... Working PRM
+  - speed: 5                                              # Speed in meters per second
+    accel: 3                                              # Acceleration in meters per second per second
+    length: 1                                             # Length of robot in meters
+    width: .75                                            # Width of robot in meters
+    max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    start_coord: [35,25,0]                                # starting coordinates of robot(s), can be "None"
+    fov: 50                                               # Field of view of robot camera in degrees
+    camera_orientation: 180                               # Degrees from facing forward
+    obstacle_dist: 0.25                                   # Min distance in meters robot can be from obstacle
+>>>>>>> parent of 8e8a032... Nonworking slope modification
     color: 'magenta'
     path: [[15,19,0],[22.625,19,4],[35,19,8]]

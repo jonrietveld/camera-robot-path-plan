@@ -43,8 +43,6 @@ def findPointOnPathAndSlope(pathArr,time):
 	q = (time-pathArr[closeTime][2])/(pathArr[closeTime+1][2]-pathArr[closeTime][2])
 	intersect = (1-q)*np.array(pathArr[closeTime][0:2]) + q*np.array(pathArr[closeTime+1][0:2])
 	intersect = np.insert(intersect,2,time)
-	if len(pathArr[closeTime]) == 4:
-		intersect = np.insert(intersect, 3,pathArr[closeTime][3])
 	return intersect,slope
 
 # Rotate a point counterclockwise by a given angle around a given origin.
@@ -118,9 +116,12 @@ def visualize(config, saveName=None, show_path = False):
 				if 'path' in config['robots'][robot]:
 					if not config['robots'][robot]['path'] == None:
 						ptOnPath,slope = findPointOnPathAndSlope(config['robots'][robot]['path'],(1.0/config['animation']['fps'])*i)
+<<<<<<< HEAD
 						#print(ptOnPath,slope,atan2(slope[1],slope[0]),atan2(slope[1],slope[0]) - ptOnPath[3])
 						#if -0.001 > atan2(slope[1],slope[0]) - ptOnPath[3] or atan2(slope[1],slope[0]) - ptOnPath[3] > 0.001:
 						#	slope = [-slope[0],-slope[1]]
+=======
+>>>>>>> parent of 8e8a032... Nonworking slope modification
 						fovRays,camDirectionUnit = findFovRays(slope,robot,ptOnPath)
 						fovFill[robot].set_xy(fovRays)
 						roboLocArr[robot].set_data(ptOnPath[0],ptOnPath[1])
@@ -622,13 +623,12 @@ def solve(inputconfig):
 						continue
 					added_shots.append(robot.given_shot)
 					for position in robot.path[::-1]:
-						robot_paths[robot.identity].append([position[0],position[1],position[3],position[2]])
+						robot_paths[robot.identity].append([position[0],position[1],position[3]])
 				current = current.parent
 			for element in range(0,len(robot_paths)):
 				solved_config['robots'][element]['path'] = robot_paths[element][::-1]
-				#if end time is missed, add it.
 				if solved_config['robots'][element]['path'] != [] and solved_config['robots'][element]['path'][-1][2] < end_time:
-					solved_config['robots'][element]['path'].append(solved_config['robots'][element]['path'][-1][0:2] + [end_time,atan2(solved_config['robots'][element]['path'][-1][1],solved_config['robots'][element]['path'][-1][0])])
+					solved_config['robots'][element]['path'].append(solved_config['robots'][element]['path'][-1][0:2] + [end_time])
 				#print(solved_config['robots'][element]['path'])	#debug
 			for robotNum in range(0,len(solved_config['robots'])):
 				if solved_config['robots'][robotNum]['path'] == []:
