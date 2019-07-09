@@ -73,33 +73,32 @@ def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 
 # Find the field of view rays for the robot wrt its config. (needs to be adjusted for shot)
 def findFovRays(roboSlope,robot_num,rotatePoint,shot = None):
-		if shot is None:
-			camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
-		else:
-			camDirectionUnit = rotate([0,0],roboSlope,shot['actor_facing'] + 180)
-		camDirectionUnit = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)
-		camDirection = camDirectionUnit*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
-		fovSlopes = [rotate([0,0],camDirection,config['robots'][robot_num]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot_num]['fov']/2)]
-		
-		fov = config['robots'][robot_num]['fov']
-		fovFillArr = []
-		if not fov >= 360:
-			fovFillArr.append(rotatePoint[0:2])
-		if fov >= 180:
-			fovFillArr.append(np.array(fovSlopes[0])+np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array(rotate([0,0],camDirection,90)) + np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array(camDirection) + np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array(rotate([0,0],camDirection,-90)) + np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array((fovSlopes[1])+np.array(rotatePoint[0:2])))
-		elif fov >= 90:
-			fovFillArr.append(np.array(fovSlopes[0])+np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array(camDirection) + np.array(rotatePoint[0:2]))
-			fovFillArr.append(np.array((fovSlopes[1])+np.array(rotatePoint[0:2])))
-		else:
-			fovFillArr.append((fovSlopes[0]+np.array(rotatePoint[0:2])))
-			fovFillArr.append((fovSlopes[1]+np.array(rotatePoint[0:2])))
-
-		return fovFillArr,camDirectionUnit
+	if shot is None:
+		camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
+	else:
+		camDirectionUnit = rotate([0,0],roboSlope,shot['actor_facing'] + 180)
+	camDirectionUnit = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)
+	camDirection = camDirectionUnit*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
+	fovSlopes = [rotate([0,0],camDirection,config['robots'][robot_num]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot_num]['fov']/2)]
+	
+	fov = config['robots'][robot_num]['fov']
+	fovFillArr = []
+	if not fov >= 360:
+		fovFillArr.append(rotatePoint[0:2])
+	if fov >= 180:
+		fovFillArr.append(np.array(fovSlopes[0])+np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array(rotate([0,0],camDirection,90)) + np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array(camDirection) + np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array(rotate([0,0],camDirection,-90)) + np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array((fovSlopes[1])+np.array(rotatePoint[0:2])))
+	elif fov >= 90:
+		fovFillArr.append(np.array(fovSlopes[0])+np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array(camDirection) + np.array(rotatePoint[0:2]))
+		fovFillArr.append(np.array((fovSlopes[1])+np.array(rotatePoint[0:2])))
+	else:
+		fovFillArr.append((fovSlopes[0]+np.array(rotatePoint[0:2])))
+		fovFillArr.append((fovSlopes[1]+np.array(rotatePoint[0:2])))
+	return fovFillArr,camDirectionUnit
 #######################################################################################################################
 
 def visualize(config, saveName=None, show_path = False):
@@ -207,7 +206,7 @@ def solve(inputconfig):
 	solve_resolution = solved_config['solve']['map_resolution']
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
-		PRM_num_points = 200
+		PRM_num_points = 1 + 125 #This number should be one more than a cubic number(python rounding errors), otherwise, rounds down to nearest cubic number
 
 		def isValidPath(path,node):
 			current = node
@@ -227,7 +226,7 @@ def solve(inputconfig):
 			return True
 
 		def PRM_Modified(point_array,start,goal):
-			aStar_Timeout = 1 #seconds
+			aStar_Timeout = 10 #seconds
 			class astar_node():
 				"""docstring for astar_node"""
 				def __init__(self, node_position, g = 0, parent = None):
@@ -261,14 +260,24 @@ def solve(inputconfig):
 				if tuple(current_point) == tuple(goal):
 					continue
 				for dest_point in point_array:
-					reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
-					node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+					if solved_config['solve']['algorithm'] == 'dubins':
+						dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+						dubins_path_length = solve_resolution*len(dubins_path)
+						node_list_prm.append((dubins_path_length,tuple(dest_point)))
+					else:
+						reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
+						node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 				directed_graph[tuple(current_point)] = tuple(node_list_prm)
 			#Then do the same for the starting node.
 			node_list_prm = []
 			for dest_point in point_array:
-				reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
-				node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+				if solved_config['solve']['algorithm'] == 'dubins':
+					dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+					dubins_path_length = solve_resolution*len(dubins_path)
+					node_list_prm.append((dubins_path_length,tuple(dest_point)))
+				else:
+					reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
+					node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 			directed_graph[tuple(start)] = tuple(node_list_prm)
 			
 
@@ -281,21 +290,30 @@ def solve(inputconfig):
 			open_list_prm.append(astar_node(start))
 			timeout = time.process_time()
 			while len(open_list_prm) > 0 and time.process_time() - timeout < aStar_Timeout:
-				print('starting')
 				current_node_prm = heapq.heappop(open_list_prm)
 				closed_list.add(current_node_prm)
 
-				if tuple(current_node_prm.node_position) == tuple(goal):
-					print('possible solution',current_node_prm.parent.node_position, current_node_prm.node_position)
+				if tuple(current_node_prm.node_position) == tuple(goal): #If goal position reached, then check if valid solution and return if it is.
+					current = current_node_prm
+					path_print = []
+					while current is not None:
+						path_print.append(current.node_position)
+						current = current.parent
+					print('possible solution',path_print)
+					#print('possible solution',current_node_prm.parent.node_position, current_node_prm.node_position)
 					path = []
 					current = current_node_prm
 					while current.parent is not None:
-						reeds_shepp_path = reeds_shepp.path_sample(current.parent.node_position,list(current.node_position),robot_cfg['max_turn_rad'],solve_resolution)
-						path += reeds_shepp_path[::-1]
+						if solved_config['solve']['algorithm'] == 'dubins':
+							dubins_path = dubins.shortest_path(current.parent.node_position, list(current.node_position), robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+							path += dubins_path[::-1]
+						else:
+							reeds_shepp_path = reeds_shepp.path_sample(current.parent.node_position,list(current.node_position),robot_cfg['max_turn_rad'],solve_resolution)
+							path += reeds_shepp_path[::-1]
 						current = current.parent
 					# Flip path to face forwards
 					path = path[::-1]
-					print(path)
+					#print(path)
 					#Add timestamps for the path
 					timestep_increment = (shot['start_time']-current_position[3])/len(path)
 					for pos in range(len(path)):
@@ -321,8 +339,8 @@ def solve(inputconfig):
 							continue
 					open_list_dict_prm[child_node_prm] = child_node_prm.g
 					heapq.heappush(open_list_prm, child_node_prm)
-				print('looping')
 			#If no solution is found by A* return -1
+			print('no solution or timeout hit')
 			return -1
 
 
@@ -333,8 +351,11 @@ def solve(inputconfig):
 			return [],-1
 
 		#Check if a direct dubins path is valid, and if it is, just return that path
-		path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
-		path_sampled = path.sample_many(solve_resolution)[0]
+		if solved_config['solve']['algorithm'] == 'dubins':
+			path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
+			path_sampled = path.sample_many(solve_resolution)[0]
+		else:
+			path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'],solve_resolution)
 
 		#Add on timesteps to dubens path
 		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
@@ -351,14 +372,26 @@ def solve(inputconfig):
 			return path_sampled,cost_to_go
 		print('dubins in frame or passes through obsticles')
 		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
-		rand_point_arr = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
-		#print(rand_point_arr)
+		#rand_point_arr = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
 		
-		print('running')
-		path_sampled = PRM_Modified(rand_point_arr,current_position[0:3], shot_start_loc[0:3])
-		print('finished')
+		# Statically placed points
+		cbrt_num_points = int(PRM_num_points**(1.0/3))
+		width_increment = float(solved_config['map']['width'])/cbrt_num_points
+		height_increment = float(solved_config['map']['height'])/cbrt_num_points
+		theta_increment = 2*pi/cbrt_num_points
+		point_arr = []
+		for i in range(cbrt_num_points):
+			for j in range(cbrt_num_points):
+				for k in range(cbrt_num_points):
+					point_arr.append([i*width_increment,j*height_increment,k*theta_increment])
+		#print(point_arr)
+		
+		print('Starting PRM')
+		path_sampled = PRM_Modified(point_arr,current_position[0:3], shot_start_loc[0:3])
+		print('Finished PRM')
 		#If PRM failed, just return nothing
 		if path_sampled == -1:
+			print('PRM failed')
 			return [],-1
 		cost_to_go = 1*solve_resolution*len(path_sampled)
 		
