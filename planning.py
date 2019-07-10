@@ -1,21 +1,20 @@
 #!/usr/bin/python3
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib import collections
+#from matplotlib import collections
 import matplotlib.patches as patches
 import matplotlib.path as mplpath
-from scipy.interpolate import interp1d
-from scipy.signal import savgol_filter
+#from scipy.interpolate import interp1d
+#from scipy.signal import savgol_filter
 import imageio
 import numpy as np
 import yaml
-import decimal
 from math import *
 from copy import *
 import heapq
 import time
 import dubins
-import reeds_shepp
+#import reeds_shepp
 import itertools
 import random
 
@@ -154,6 +153,7 @@ def visualize(config, saveName=None, show_path = False):
 	print('Visualizing')
 	if show_path:
 		fig1, ax1 = plt.subplots()
+		ax1.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
 		for identity,robot in enumerate(solved_config['robots']):
 			if 'path' in robot:
 				x = np.array([pathpoint[0] for pathpoint in robot['path']])
@@ -184,7 +184,7 @@ def visualize(config, saveName=None, show_path = False):
 			ax.add_patch(roboShot[len(roboShot)-1])
 		roboLocArr.append(pt)
 		segmentArr.append(segment)
-	ax.legend() 
+	ax.legend(loc = 'upper right') 
 	#Setup animation
 	if not config['actor']['path'] == None:
 		maxtime = max(config['actor']['path'],key=lambda x: x[2])
@@ -204,6 +204,7 @@ def visualize(config, saveName=None, show_path = False):
 def solve(inputconfig):
 	solved_config = deepcopy(inputconfig)
 	solve_resolution = solved_config['solve']['map_resolution']
+	#already_solved_paths = {}
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
 		PRM_num_points = 1 + 125 #This number should be one more than a cubic number(python rounding errors), otherwise, rounds down to nearest cubic number
@@ -221,9 +222,9 @@ def solve(inputconfig):
 								pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
 								insidePoly = mplpath.Path(fovPoly).contains_points([pathPos[0:2]])
 								if insidePoly[0]:
-									return False
+									return False,robot.given_shot
 				current = current.parent
-			return True
+			return True,{}
 
 		def PRM_Modified(point_array,start,goal):
 			aStar_Timeout = 10 #seconds
@@ -259,25 +260,26 @@ def solve(inputconfig):
 				# Don't look for node past the goal node.
 				if tuple(current_point) == tuple(goal):
 					continue
+				# Add all connections from current point to every other point to our point array so we know where our current point can lead
 				for dest_point in point_array:
-					if solved_config['solve']['algorithm'] == 'dubins':
-						dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
-						dubins_path_length = solve_resolution*len(dubins_path)
-						node_list_prm.append((dubins_path_length,tuple(dest_point)))
-					else:
-						reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
-						node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+					#if solved_config['solve']['algorithm'] == 'dubins':
+					dubins_path = dubins.shortest_path(current_point,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+					dubins_path_length = solve_resolution*len(dubins_path)
+					node_list_prm.append((dubins_path_length,tuple(dest_point)))
+					#else:
+					#	reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
+					#	node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 				directed_graph[tuple(current_point)] = tuple(node_list_prm)
 			#Then do the same for the starting node.
 			node_list_prm = []
 			for dest_point in point_array:
-				if solved_config['solve']['algorithm'] == 'dubins':
-					dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
-					dubins_path_length = solve_resolution*len(dubins_path)
-					node_list_prm.append((dubins_path_length,tuple(dest_point)))
-				else:
-					reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
-					node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
+				#if solved_config['solve']['algorithm'] == 'dubins':
+				dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+				dubins_path_length = solve_resolution*len(dubins_path)
+				node_list_prm.append((dubins_path_length,tuple(dest_point)))
+				#else:
+				#	reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
+				#	node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 			directed_graph[tuple(start)] = tuple(node_list_prm)
 			
 
@@ -291,7 +293,7 @@ def solve(inputconfig):
 			timeout = time.process_time()
 			while len(open_list_prm) > 0 and time.process_time() - timeout < aStar_Timeout:
 				current_node_prm = heapq.heappop(open_list_prm)
-				closed_list.add(current_node_prm)
+				closed_list_prm.add(current_node_prm)
 
 				if tuple(current_node_prm.node_position) == tuple(goal): #If goal position reached, then check if valid solution and return if it is.
 					current = current_node_prm
@@ -304,12 +306,12 @@ def solve(inputconfig):
 					path = []
 					current = current_node_prm
 					while current.parent is not None:
-						if solved_config['solve']['algorithm'] == 'dubins':
-							dubins_path = dubins.shortest_path(current.parent.node_position, list(current.node_position), robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
-							path += dubins_path[::-1]
-						else:
-							reeds_shepp_path = reeds_shepp.path_sample(current.parent.node_position,list(current.node_position),robot_cfg['max_turn_rad'],solve_resolution)
-							path += reeds_shepp_path[::-1]
+						#if solved_config['solve']['algorithm'] == 'dubins':
+						dubins_path = dubins.shortest_path(current.parent.node_position, list(current.node_position), robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+						path += dubins_path[::-1]
+						#else:
+						#	reeds_shepp_path = reeds_shepp.path_sample(current.parent.node_position,list(current.node_position),robot_cfg['max_turn_rad'],solve_resolution)
+						#	path += reeds_shepp_path[::-1]
 						current = current.parent
 					# Flip path to face forwards
 					path = path[::-1]
@@ -323,16 +325,16 @@ def solve(inputconfig):
 						else:
 							path[pos] = list(path[pos])
 							path[pos].append((pos+1)*timestep_increment+current_position[3])
-					if isValidPath(path,parent_node):
+					if isValidPath(path,parent_node)[0]:
 						return path
 					else:
 						continue
 						
 				for child_node_prm in current_node_prm.findChildren(directed_graph): #For each of the children, find if it needs to be added to open_list, and do necessary
-					if child_node_prm in closed_list:
+					if child_node_prm in closed_list_prm and tuple(child_node_prm.position) != tuple(goal):
 						continue
 					child_node_prm.g = current_node_prm.g + child_node_prm.g
-					child_node_prm.h = hypot(child_node_prm.node_position[0] - goal[0],child_node_prm.node_position[1] - goal[1])
+					child_node_prm.h = solve_resolution*len(dubins.shortest_path(child_node_prm.node_position,goal, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0])
 					child_node_prm.f = child_node_prm.g + child_node_prm.h
 					if child_node_prm in open_list_dict_prm:
 						if child_node_prm.g >= open_list_dict_prm[child_node_prm]:
@@ -343,19 +345,28 @@ def solve(inputconfig):
 			print('no solution or timeout hit')
 			return -1
 
+		#First check if the path from current_position to shot_start_loc with robot config has already been solved
+		#if (tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg)) in already_solved_paths:
+		#	return list(already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))][0]),already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))][1]
 
 		#Check if endpoints are not in another shot
 		path = [current_position,shot_start_loc]
-		if not isValidPath(path,parent_node):
-			print('Shots overlap, or shot starts or ends on an obsticles. Please check your shot parameters.')
+		valid,return_shot = isValidPath(path,parent_node)
+		if not valid:
+			for cur_shot_num,cur_shot in enumerate(solved_config['shots']):
+				if cur_shot == shot:
+					shot1 = cur_shot_num + 1
+				if cur_shot == return_shot:
+					shot2 == cur_shot_num + 1
+			print('Error: Shot {} overlaps with shot {}. (shots are not zero indexed)'.format(shot1,shot2))
 			return [],-1
 
 		#Check if a direct dubins path is valid, and if it is, just return that path
-		if solved_config['solve']['algorithm'] == 'dubins':
-			path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
-			path_sampled = path.sample_many(solve_resolution)[0]
-		else:
-			path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'],solve_resolution)
+		#if solved_config['solve']['algorithm'] == 'dubins':
+		path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
+		path_sampled = path.sample_many(solve_resolution)[0]
+		#else:
+		#	path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'],solve_resolution)
 
 		#Add on timesteps to dubens path
 		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
@@ -368,11 +379,14 @@ def solve(inputconfig):
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
 
 		cost_to_go = 1*solve_resolution*len(path_sampled)
-		if isValidPath(path_sampled,parent_node):
+		if isValidPath(path_sampled,parent_node)[0]:
 			return path_sampled,cost_to_go
-		print('dubins in frame or passes through obsticles')
+
+
 		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
-		#rand_point_arr = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
+
+		#Randomly placed points
+		#rand_point = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
 		
 		# Statically placed points
 		cbrt_num_points = int(PRM_num_points**(1.0/3))
@@ -395,7 +409,7 @@ def solve(inputconfig):
 			return [],-1
 		cost_to_go = 1*solve_resolution*len(path_sampled)
 		
-		
+		#already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))] = (tuple(path_sampled),cost_to_go)
 
 		return path_sampled,cost_to_go
 
