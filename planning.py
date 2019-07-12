@@ -219,15 +219,15 @@ def solve(inputconfig):
 			while current != None:
 				for robot in current.assigned_robots:
 					if type(robot.given_shot) == dict and len(robot.path) > 0:
-						for roboPos in robot.path:
-							if path[0][2] <= roboPos[3] <= path[-1][2]: #Only check robo positions that are within the time bounds of the path your checking
-								fovPoly = findFovRays([cos(roboPos[2]),sin(roboPos[2])],robot.identity,roboPos,robot.given_shot)[0]
-								pathPos,_ = findPointOnPathAndSlope(path,roboPos[3])
-								insidePoly = mplpath.Path(fovPoly).contains_points([pathPos[0:2]])
+						assigned_robot_path = [[p[0],p[1],p[3]] for p in robot.path]
+						for test_roboPos in path:
+							if assigned_robot_path[0][2] <= test_roboPos[2] <= assigned_robot_path[-1][2]:
+								planned_pathPos,theta_planned = findPointOnPathAndSlope(assigned_robot_path,test_roboPos[2])
+								fovPoly = findFovRays(theta_planned,robot.identity,planned_pathPos,robot.given_shot)[0]
+								insidePoly = mplpath.Path(fovPoly).contains_points([test_roboPos[0:2]])
 								if insidePoly[0]:
 									return False,robot.given_shot
 				current = current.parent
-				print('valid')
 			return True,{}
 
 		def PRM_Modified(point_array,start,goal):
@@ -351,8 +351,8 @@ def solve(inputconfig):
 
 		#First check if the path from current_position to shot_start_loc with robot config has already been solved
 		already_solved_identifier = (tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg),tuple([str(cur_shot) for cur_shot in parent_node.available_shots]))
-		#if already_solved_identifier in already_solved_paths:
-		#	return list(already_solved_paths[already_solved_identifier][0]),already_solved_paths[already_solved_identifier][1]
+		if already_solved_identifier in already_solved_paths:
+			return list(already_solved_paths[already_solved_identifier][0]),already_solved_paths[already_solved_identifier][1]
 
 		#Check if endpoints are not in another shot
 		path = [current_position,shot_start_loc]
@@ -752,8 +752,8 @@ config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],5))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
 solved_config = solve(config)
-#with open('result.yaml', 'w') as yaml_file:
-#	yaml.dump(solved_config, yaml_file, default_flow_style=False)
+with open('errors.yaml', 'w') as yaml_file:
+	yaml.dump(solved_config, yaml_file, default_flow_style=False)
 #visualize(solved_config)
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
