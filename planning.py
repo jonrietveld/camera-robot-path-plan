@@ -151,21 +151,24 @@ def visualize(config, saveName=None, show_path = False):
 
 	
 	print('Visualizing')
+	# Read image and create plots
+	img1 = imageio.imread(config['map']['path'])
+	img1 = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img1]
 	if show_path:
 		fig1, ax1 = plt.subplots()
 		ax1.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
+		res1 = ax1.imshow(img1,cmap="gray",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
+		res1.set_clim(0,1)
 		for identity,robot in enumerate(solved_config['robots']):
 			if 'path' in robot:
 				x = np.array([pathpoint[0] for pathpoint in robot['path']])
 				y = np.array([pathpoint[1] for pathpoint in robot['path']])
 				ax1.plot(x, y, label= "Robot {}".format(identity))
 		ax1.legend()
-	#read image and create plot
-	img1 = imageio.imread(config['map']['path'])
-	#img1 = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img1]
 	fig, ax = plt.subplots()
 	ax.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
-	ax.imshow(img1,cmap="binary",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
+	res = ax.imshow(img1,cmap="gray",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
+	res.set_clim(0,1)
 
 	#Create plot points and segments for each robots. Create the point for the actor. Create the Field of View for the robots.
 	roboLocArr = []
@@ -206,11 +209,11 @@ def solve(inputconfig):
 	solved_config = deepcopy(inputconfig)
 	solve_resolution = solved_config['solve']['resolution']
 	already_solved_paths = {}
-	#img = imageio.imread(config['map']['path'])
-	#img = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img]
+	img = imageio.imread(config['map']['path'])
+	img = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img]
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
-		PRM_num_points = 1 + solved_config['solve']['PRM_num_points'] #This number should be one more than a cubic number(python rounding errors), otherwise, rounds down to nearest cubic number
+		PRM_num_points = solved_config['solve']['PRM_num_points']
 
 		def isValidPath(path,node):
 			current = node
@@ -231,7 +234,7 @@ def solve(inputconfig):
 			return True,{}
 
 		def PRM_Modified(point_array,start,goal):
-			aStar_Timeout = 10 #seconds
+			aStar_Timeout = float(solved_config['solve']['PRM_timeout']) #seconds
 			class astar_node():
 				"""docstring for astar_node"""
 				def __init__(self, node_position, g = 0, parent = None):
@@ -244,11 +247,14 @@ def solve(inputconfig):
 				def __lt__(self, other):
 					return self.f < other.f
 
+				#def __repr__(self):
+				#	return 'astar_node({})'.format(self.__hash__())
+
 				def __hash__(self):
 					return hash("astar_node({})".format(self.node_position))
 			
-				#def __eq__(self, other):
-				#	return self.__hash__() == other.__hash__()
+				def __eq__(self, other):
+					return self.__hash__() == other.__hash__()
 		
 				def findChildren(self,directed_graph):
 					node_list_prm =[]
@@ -266,26 +272,45 @@ def solve(inputconfig):
 					continue
 				# Add all connections from current point to every other point to our point array so we know where our current point can lead
 				for dest_point in point_array:
-					#if solved_config['solve']['algorithm'] == 'dubins':
 					dubins_path = dubins.shortest_path(current_point,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+					# Check to make sure the dubins path doesn't pass through obstacles.
+					error = 0
+					for point in dubins_path:
+						if error == 1:
+							break
+						pointx = int(point[0] * len(img[0]) / float(solved_config['map']['width']))
+						pointy = int(point[1] * len(img) / float(solved_config['map']['height']))
+						#print(point,pointx,pointy,len(img[pointy]),len(img))
+						if point[0] > solved_config['map']['width'] or point[1] > solved_config['map']['height']:
+							error = 1
+						if not img[solved_config['map']['height'] - pointy][pointx]:
+							error = 1
+					if error == 1:
+						continue
 					dubins_path_length = solve_resolution*len(dubins_path)
 					node_list_prm.append((dubins_path_length,tuple(dest_point)))
-					#else:
-					#	reeds_shepp_length = reeds_shepp.path_length(current_point,dest_point,robot_cfg['max_turn_rad'])
-					#	node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 				directed_graph[tuple(current_point)] = tuple(node_list_prm)
 			#Then do the same for the starting node.
 			node_list_prm = []
 			for dest_point in point_array:
-				#if solved_config['solve']['algorithm'] == 'dubins':
 				dubins_path = dubins.shortest_path(start,dest_point, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0]
+				# Check to make sure the dubins path doesn't pass through obstacles.
+				error = 0
+				for point in dubins_path:
+					if error == 1:
+						break
+					pointx = int(point[0] * len(img[0]) / float(solved_config['map']['width']))
+					pointy = int(point[1] * len(img) / float(solved_config['map']['height']))
+					#print(point,pointx,pointy,len(img[pointy]),len(img))
+					if point[0] > solved_config['map']['width'] or point[1] > solved_config['map']['height']:
+						error = 1
+					if not img[solved_config['map']['height'] - pointy][pointx]:
+						error = 1
+				if error == 1:
+					continue
 				dubins_path_length = solve_resolution*len(dubins_path)
 				node_list_prm.append((dubins_path_length,tuple(dest_point)))
-				#else:
-				#	reeds_shepp_length = reeds_shepp.path_length(start,dest_point,robot_cfg['max_turn_rad'])
-				#	node_list_prm.append((reeds_shepp_length,tuple(dest_point)))
 			directed_graph[tuple(start)] = tuple(node_list_prm)
-			
 
 
 			# Run A* on the connected points to find the lowest path length that will produce a usable path
@@ -335,7 +360,7 @@ def solve(inputconfig):
 						continue
 						
 				for child_node_prm in current_node_prm.findChildren(directed_graph): #For each of the children, find if it needs to be added to open_list, and do necessary
-					if child_node_prm in closed_list_prm and tuple(child_node_prm.position) != tuple(goal):
+					if child_node_prm in closed_list_prm and tuple(child_node_prm.node_position) != tuple(goal):
 						continue
 					child_node_prm.g = current_node_prm.g + child_node_prm.g
 					child_node_prm.h = solve_resolution*len(dubins.shortest_path(child_node_prm.node_position,goal, robot_cfg['max_turn_rad']).sample_many(solve_resolution)[0])
@@ -346,7 +371,10 @@ def solve(inputconfig):
 					open_list_dict_prm[child_node_prm] = child_node_prm.g
 					heapq.heappush(open_list_prm, child_node_prm)
 			#If no solution is found by A* return -1
-			print('no solution or timeout hit')
+			if time.process_time() - timeout < aStar_Timeout:
+				print('No solution to PRM')
+			else:
+				print('PRM timeout hit')
 			return -1
 
 		#First check if the path from current_position to shot_start_loc with robot config has already been solved
@@ -385,26 +413,41 @@ def solve(inputconfig):
 				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
 
 		cost_to_go = 1*solve_resolution*len(path_sampled)
-		if isValidPath(path_sampled,parent_node)[0]:
+
+		#Check to see if direct path passes over obsticles in environment png file
+		error_test = 0
+		for point in path_sampled:
+			if error_test == 1:
+				break
+			pointx = int(point[0] * len(img[0]) / float(solved_config['map']['width']))
+			pointy = int(point[1] * len(img) / float(solved_config['map']['height']))
+			if point[0] > solved_config['map']['width'] or point[1] > solved_config['map']['height']:
+				error_test = 1
+			if not img[solved_config['map']['height'] - pointy][pointx]:
+				error_test = 1
+
+
+		if isValidPath(path_sampled,parent_node)[0] and error_test != 1:
 			already_solved_paths[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
 			return path_sampled,cost_to_go
 
 
 		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
 
-		#Randomly placed points
-		#rand_point = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
-		
+		#Randomly placed point.
+		if solved_config['solve']['PRM_points'] == 'random':
+			point_arr = [[random.uniform(0,solved_config['map']['width']),random.uniform(0,solved_config['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
 		# Statically placed points
-		cbrt_num_points = int(PRM_num_points**(1.0/3))
-		width_increment = float(solved_config['map']['width'])/cbrt_num_points
-		height_increment = float(solved_config['map']['height'])/cbrt_num_points
-		theta_increment = 2*pi/cbrt_num_points
-		point_arr = []
-		for i in range(cbrt_num_points):
-			for j in range(cbrt_num_points):
-				for k in range(cbrt_num_points):
-					point_arr.append([i*width_increment,j*height_increment,k*theta_increment])
+		else:
+			cbrt_num_points = int((PRM_num_points + 1)**(1.0/3)) # Add one to the number of PRM points because of python rounding errors
+			width_increment = float(solved_config['map']['width'])/cbrt_num_points
+			height_increment = float(solved_config['map']['height'])/cbrt_num_points
+			theta_increment = 2*pi/cbrt_num_points
+			point_arr = []
+			for i in range(cbrt_num_points):
+				for j in range(cbrt_num_points):
+					for k in range(cbrt_num_points):
+						point_arr.append([i*width_increment,j*height_increment,k*theta_increment])
 		#print(point_arr)
 		
 		print('Starting PRM')
@@ -412,7 +455,6 @@ def solve(inputconfig):
 		print('Finished PRM')
 		#If PRM failed, just return nothing
 		if path_sampled == -1:
-			print('PRM failed')
 			already_solved_paths[already_solved_identifier] = [],-1
 			return [],-1
 		cost_to_go = 1*solve_resolution*len(path_sampled)

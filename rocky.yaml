@@ -17,7 +17,7 @@ shots:
 
 actor:
   path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]]        # Path an actor will follow
-  timestep_resolution: .5                                # The accuracy of recording the actor's path timestep. Used to test robot's dubins constraints agains path for validity checking
+  timestep_resolution: .1                                # The accuracy of recording the actor's path timestep. Used to test robot's dubins constraints agains path for validity checking
   color: 'red'
 
 animation:
@@ -34,14 +34,15 @@ solve:
   resolution: .1                                          # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
   #time_resolution: .1                                    # Number of seconds to count as one time step - linearly effects runtime of code
   PRM_timeout: inf                                        # Number of seconds before the PRM algorithm will admit defeat (can be inf for infinity)
-  PRM_num_points: 125                                     # Number of points to search through in PRM algorithm rounded down to nearest cubic number
+  PRM_num_points: 125                                     # Number of points to search through in PRM algorithm. (rounded down to nearest cubic number for grid)
+  PRM_points: 'grid'                                      # How the PRM algorithm finds points. Can be either 'grid' or 'random'. defaults to 'grid'
 
 robots:                                                   # robots
   - speed: 5                                              # Speed in meters per second
     accel: 3                                              # Acceleration in meters per second per second
     length: 1                                             # Length of robot in meters
     width: .75                                            # Width of robot in meters
-    max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    max_turn_rad: .7                                      # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
     start_coord: [0,0,0]                                  # Starting coordinates of robot(s), can be "None"
     fov: 70                                               # Field of view of robot camera in degrees
     camera_orientation: 180                               # Degrees from facing forward
@@ -53,7 +54,7 @@ robots:                                                   # robots
     accel: 3                                              # Acceleration in meters per second per second
     length: 1                                             # Length of robot in meters
     width: .75                                            # Width of robot in meters
-    max_turn_rad: 4                                       # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    max_turn_rad: .7                                      # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
     start_coord: [35,25,0]                                # starting coordinates of robot(s), can be "None"
     fov: 50                                               # Field of view of robot camera in degrees
     camera_orientation: 180                               # Degrees from facing forward
