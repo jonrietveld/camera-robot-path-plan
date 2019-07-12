@@ -22,7 +22,7 @@ import random
 #######################################################################################################################
 # Find point on segment joining two closest points in array given. Find this point at given time.
 def findPointOnPathAndSlope(pathArr,time):
-	#find closest point time on path below given time
+	#find closest point time on path below given time through linear interpolation
 	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[2]-time)))   
 	time = round(time, 10) 
 	if time - round(pathArr[closeTime][2],10) <= 0:									#finds closest point below given time and uses it's timestamp
@@ -162,6 +162,7 @@ def visualize(config, saveName=None, show_path = False):
 		ax1.legend()
 	#read image and create plot
 	img1 = imageio.imread(config['map']['path'])
+	#img1 = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img1]
 	fig, ax = plt.subplots()
 	ax.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
 	ax.imshow(img1,cmap="binary",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
@@ -203,11 +204,13 @@ def visualize(config, saveName=None, show_path = False):
 
 def solve(inputconfig):
 	solved_config = deepcopy(inputconfig)
-	solve_resolution = solved_config['solve']['map_resolution']
-	#already_solved_paths = {}
+	solve_resolution = solved_config['solve']['resolution']
+	already_solved_paths = {}
+	#img = imageio.imread(config['map']['path'])
+	#img = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in img]
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
-		PRM_num_points = 1 + 125 #This number should be one more than a cubic number(python rounding errors), otherwise, rounds down to nearest cubic number
+		PRM_num_points = 1 + solved_config['solve']['PRM_num_points'] #This number should be one more than a cubic number(python rounding errors), otherwise, rounds down to nearest cubic number
 
 		def isValidPath(path,node):
 			current = node
@@ -224,6 +227,7 @@ def solve(inputconfig):
 								if insidePoly[0]:
 									return False,robot.given_shot
 				current = current.parent
+				print('valid')
 			return True,{}
 
 		def PRM_Modified(point_array,start,goal):
@@ -346,8 +350,9 @@ def solve(inputconfig):
 			return -1
 
 		#First check if the path from current_position to shot_start_loc with robot config has already been solved
-		#if (tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg)) in already_solved_paths:
-		#	return list(already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))][0]),already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))][1]
+		already_solved_identifier = (tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg),tuple([str(cur_shot) for cur_shot in parent_node.available_shots]))
+		#if already_solved_identifier in already_solved_paths:
+		#	return list(already_solved_paths[already_solved_identifier][0]),already_solved_paths[already_solved_identifier][1]
 
 		#Check if endpoints are not in another shot
 		path = [current_position,shot_start_loc]
@@ -359,6 +364,7 @@ def solve(inputconfig):
 				if cur_shot == return_shot:
 					shot2 == cur_shot_num + 1
 			print('Error: Shot {} overlaps with shot {}. (shots are not zero indexed)'.format(shot1,shot2))
+			already_solved_paths[already_solved_identifier] = [],-1
 			return [],-1
 
 		#Check if a direct dubins path is valid, and if it is, just return that path
@@ -380,6 +386,7 @@ def solve(inputconfig):
 
 		cost_to_go = 1*solve_resolution*len(path_sampled)
 		if isValidPath(path_sampled,parent_node)[0]:
+			already_solved_paths[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
 			return path_sampled,cost_to_go
 
 
@@ -406,11 +413,11 @@ def solve(inputconfig):
 		#If PRM failed, just return nothing
 		if path_sampled == -1:
 			print('PRM failed')
+			already_solved_paths[already_solved_identifier] = [],-1
 			return [],-1
 		cost_to_go = 1*solve_resolution*len(path_sampled)
 		
-		#already_solved_paths[(tuple(current_position[0:3]), tuple(shot_start_loc[0:3]), str(robot_cfg))] = (tuple(path_sampled),cost_to_go)
-
+		already_solved_paths[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
 		return path_sampled,cost_to_go
 
 	
@@ -441,11 +448,11 @@ def solve(inputconfig):
 		#		cost_to_go += 1000000			#Change fix please
 			
 		
-		#calculate ctg following actor
+		# Find the path to follow the actor
 		following_actor = []
 		current_position = np.array([])
+		time_arr = np.arange(shot['start_time'],shot['end_time'],solved_config['actor']['timestep_resolution'])
 		#If endpoint was missed, add it
-		time_arr = np.arange(shot['start_time'],shot['end_time'],solved_config['solve']['time_resolution'])
 		if not time_arr[-1] == shot['end_time']:
 			time_arr = np.append(time_arr,shot['end_time'])
 		for time in time_arr:
@@ -453,6 +460,40 @@ def solve(inputconfig):
 			current_position = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 			current_position = np.append(current_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 			current_position = np.append(current_position, time)
+			# Check if the path the robot is taking is possible with its turning constraints.
+
+			def get_intersect(a1, a2, b1, b2):
+			    """ 
+			    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
+			    a1: [x, y] a point on the first line
+			    a2: [x, y] another point on the first line
+			    b1: [x, y] a point on the second line
+			    b2: [x, y] another point on the second line
+			    """
+			    s = np.vstack([a1,a2,b1,b2])        # s for stacked
+			    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
+			    l1 = np.cross(h[0], h[1])           # get first line
+			    l2 = np.cross(h[2], h[3])           # get second line
+			    x, y, z = np.cross(l1, l2)          # point of intersection
+			    if z == 0:                          # lines are parallel
+			        return (float('inf'), float('inf'))
+			    return (x/z, y/z)
+
+
+			#if len(following_actor) == 0:
+			#	previous_point = path_sampled[-1]
+			#else:
+			#	previous_point = following_actor[-1]
+			#if tuple(current_position[0:3]) == tuple(previous_point[0:3]):
+			#	found_shot = -1
+			#	for find_shot_num,find_shot in enumerate(solved_config['shots']):
+			#		if find_shot == shot:
+			#			found_shot = find_shot_num + 1
+			#	print('At time {} the actor turns too sharply for any robot to capture shot {}'.format(time,found_shot))
+			#	return [],-1
+
+
+			#Then create the circle through the two vectors at given solve resolution
 			following_actor.append(current_position.tolist())
 			#Add cost for being oustide of shot polygon
 			#robot_cam_dir = rotate([0,0],actor_slope_unitVect,robot_cfg['camera_orientation'])

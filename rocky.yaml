@@ -16,7 +16,8 @@ shots:
     actor_facing: -90                                    # Number of degrees off the actor is from the direction the camera is facing
 
 actor:
-  path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]]        # [5,22,1],[9,18,2],[9,15,3],[16,14,4],[17,5,5],[22,5,6],[22,9,7],[17,12,8]]                                                    # ,[18,15,9]]                                                   # ,[28,14,10],[33,7,11]]      [[2,15,0],[35,15,4]]                                                    # Path an actor will follow
+  path: [[4,26,0],[31,24,2.5],[32,6,5.5],[7,7,8]]        # Path an actor will follow
+  timestep_resolution: .5                                # The accuracy of recording the actor's path timestep. Used to test robot's dubins constraints agains path for validity checking
   color: 'red'
 
 animation:
@@ -30,10 +31,10 @@ map:
   width: 40                                               # Width in meters of the width of the png file (giving scale for png file)
 
 solve:
-  map_resolution: .1                                      # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
-  time_resolution: .1                                     # Number of seconds to count as one time step - linearly effects runtime of code
-  algorithm: 'dubins'                                     # Can be 'dubins' or 'reeds_shepp'
-  PRM_timeout: 10                                         # Number of seconds before the PRM algorithm will admit defeat
+  resolution: .1                                          # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
+  #time_resolution: .1                                    # Number of seconds to count as one time step - linearly effects runtime of code
+  PRM_timeout: inf                                        # Number of seconds before the PRM algorithm will admit defeat (can be inf for infinity)
+  PRM_num_points: 125                                     # Number of points to search through in PRM algorithm rounded down to nearest cubic number
 
 robots:                                                   # robots
   - speed: 5                                              # Speed in meters per second
