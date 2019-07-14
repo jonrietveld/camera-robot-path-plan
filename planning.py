@@ -205,7 +205,7 @@ def visualize(config, saveName=None, show_path = False):
 		plt.show()
 
 
-def solve(inputconfig):
+def solve(inputconfig,VERBOSE = False):
 	print('Solving config...')
 	SOLVED_CONFIG = deepcopy(inputconfig)
 	SOLVE_RESOLUTION = SOLVED_CONFIG['solve']['resolution']
@@ -252,12 +252,39 @@ def solve(inputconfig):
 			def __eq__(self, other):
 				return self.__hash__() == other.__hash__()
 	
-			def findChildren(self,directed_graph):
+			def findChildren(self,point_array):
 				node_list_prm =[]
-				for vertex in directed_graph[tuple(self.position)]:
-					node_list_prm.append(astar_node(vertex[1],vertex[0],self))
-				return node_list_prm
+	
+				# Don't look for node past the goal node.
+				if goal is not None and tuple(self.position) == tuple(goal):
+					return []
+				# Add all connections from current point to every other point to our point array so we know where our current point can lead
+				for dest_point in point_array:
+					dubins_path = dubins.shortest_path(self.position,dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+					# Check to make sure the dubins path doesn't pass through obstacles.
+					error = 0
+					for point in dubins_path:
+						pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
+						pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
+						if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
+							error = 1
+							break
+						#print(point,pointx,pointy,len(IMG))
+						if not IMG[-pointy][pointx]:
+							error = 1
+							break
+					if error == 1:
+						continue
+					dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
+					node_list_prm.append((dubins_path_length,tuple(dest_point)))
+
+				return_list = []
+				for vertex in node_list_prm:
+					return_list.append(astar_node(vertex[1],vertex[0],self))
+				return return_list
 				
+		if VERBOSE == True:
+			print('Connecting all possible points in directed graph...')
 		#Randomly placed point.
 		if SOLVED_CONFIG['solve']['PRM_points'] == 'random':
 			point_array = [[random.uniform(0,SOLVED_CONFIG['map']['width']),random.uniform(0,SOLVED_CONFIG['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
@@ -276,55 +303,36 @@ def solve(inputconfig):
 		if goal is not None:
 			point_array.append(goal)
 		#Create a dictionary of points which have as indices all the points they connect to with the path length
-		directed_graph = {}
-		for current_point in point_array:
-			node_list_prm = []
-			# Don't look for node past the goal node.
-			if goal is not None and tuple(current_point) == tuple(goal):
-				continue
-			# Add all connections from current point to every other point to our point array so we know where our current point can lead
-			for dest_point in point_array:
-				dubins_path = dubins.shortest_path(current_point,dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
-				# Check to make sure the dubins path doesn't pass through obstacles.
-				error = 0
-				for point in dubins_path:
-					pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
-					pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
-					if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
-						error = 1
-						break
-					#print(point,pointx,pointy,len(IMG))
-					if not IMG[-pointy][pointx]:
-						error = 1
-						break
-				if error == 1:
-					continue
-				dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
-				node_list_prm.append((dubins_path_length,tuple(dest_point)))
-			directed_graph[tuple(current_point)] = tuple(node_list_prm)
+		#directed_graph = {}
+		#for current_point in point_array:
+		#	
+		#	directed_graph[tuple(current_point)] = tuple(node_list_prm)
+		#
+		##Then do the same for the starting node.
+		#node_list_prm = []
+		#for dest_point in point_array:
+		#	dubins_path = dubins.shortest_path(start[0:3],dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+		#	# Check to make sure the dubins path doesn't pass through obstacles.
+		#	error = 0
+		#	for point in dubins_path:
+		#		pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
+		#		pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
+		#		#print(point,pointx,pointy,len(IMG[pointy]),len(IMG))
+		#		if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
+		#				error = 1
+		#				break
+		#		if not IMG[-pointy][pointx]:
+		#			error = 1
+		#			break
+		#	if error == 1:
+		#		continue
+		#	dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
+		#	node_list_prm.append((dubins_path_length,tuple(dest_point)))
+		#directed_graph[tuple(start[0:3])] = tuple(node_list_prm)
 		
-		#Then do the same for the starting node.
-		node_list_prm = []
-		for dest_point in point_array:
-			dubins_path = dubins.shortest_path(start[0:3],dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
-			# Check to make sure the dubins path doesn't pass through obstacles.
-			error = 0
-			for point in dubins_path:
-				pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
-				pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
-				#print(point,pointx,pointy,len(IMG[pointy]),len(IMG))
-				if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
-						error = 1
-						break
-				if not IMG[-pointy][pointx]:
-					error = 1
-					break
-			if error == 1:
-				continue
-			dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
-			node_list_prm.append((dubins_path_length,tuple(dest_point)))
-		directed_graph[tuple(start[0:3])] = tuple(node_list_prm)
-		
+
+		if VERBOSE == True:
+			print('Beginning A* Search...')
 		# Run A* on the connected points to find the lowest path length that will produce a usable path
 		open_list_prm = []
 		closed_list_prm = set(())
@@ -338,11 +346,12 @@ def solve(inputconfig):
 			if goal is not None and tuple(current_node_prm.position) == tuple(goal) or goal is None: #If goal position reached, then check if valid solution and return if it is.
 				current = current_node_prm
 				# Print out a possible array of locations to travel avoiding obsticles (next check if it avoids shots)
-				path_print = []
-				while current is not None:
-					path_print.append(current.position)
-					current = current.parent
-				print('possible solution',path_print)
+				if VERBOSE == True:
+					path_print = []
+					while current is not None:
+						path_print.append(current.position)
+						current = current.parent
+					print('possible solution',path_print[::-1])
 				
 				# Connect all points in possible array with dubins path				
 				path = []
@@ -377,7 +386,7 @@ def solve(inputconfig):
 			else: #Otherwise we are solving for trajectories to get robot out of shot
 				pass
 
-			for child_node_prm in current_node_prm.findChildren(directed_graph): #For each of the children, find if it needs to be added to open_list, and do necessary
+			for child_node_prm in current_node_prm.findChildren(point_array): #For each of the children, find if it needs to be added to open_list, and do necessary
 				if child_node_prm in closed_list_prm and goal is not None and tuple(child_node_prm.position) != tuple(goal):
 					continue
 				child_node_prm.g = current_node_prm.g + child_node_prm.g
@@ -456,10 +465,11 @@ def solve(inputconfig):
 
 
 		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
-		
-		print('Starting PRM')
+		if VERBOSE == True:
+			print('Starting PRM for Shot Planning...')
 		path_sampled = PRM_Modified(parent_node,robot_cfg,current_position,shot, shot_start_loc[0:3])
-		print('Finished PRM')
+		if VERBOSE == True:
+			print('Finished PRM for Shot Planning')
 		#If PRM failed, just return nothing
 		if path_sampled == -1:
 			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
@@ -761,8 +771,12 @@ def solve(inputconfig):
 			for element in range(0,len(robot_paths)):
 				SOLVED_CONFIG['robots'][element]['path'] = robot_paths[element][::-1]
 				if SOLVED_CONFIG['robots'][element]['path'] != [] and robot_paths[robot.identity][-1][2] != end_time:
+					if VERBOSE == True:
+						print('Starting PRM to keep Robot out of Shots...')
 					SOLVED_CONFIG['robots'][element]['path'].extend(PRM_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1]))
-				
+					if VERBOSE == True:
+						print('Finished PRM')
+
 				SOLVED_CONFIG['robots'][element]['path'] = [[p[0],p[1],p[3]] for p in SOLVED_CONFIG['robots'][element]['path']]
 				if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][2] < end_time:
 					SOLVED_CONFIG['robots'][element]['path'].append(SOLVED_CONFIG['robots'][element]['path'][-1][0:2] + [end_time])
