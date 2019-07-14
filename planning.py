@@ -284,7 +284,7 @@ def solve(inputconfig,VERBOSE = False):
 				return return_list
 				
 		if VERBOSE == True:
-			print('Connecting all possible points in directed graph...')
+			print('Generating PRM points...')
 		#Randomly placed point.
 		if SOLVED_CONFIG['solve']['PRM_points'] == 'random':
 			point_array = [[random.uniform(0,SOLVED_CONFIG['map']['width']),random.uniform(0,SOLVED_CONFIG['map']['height']),random.uniform(0,2*pi)] for _ in range(PRM_num_points)]
@@ -469,7 +469,7 @@ def solve(inputconfig,VERBOSE = False):
 			print('Starting PRM for Shot Planning...')
 		path_sampled = PRM_Modified(parent_node,robot_cfg,current_position,shot, shot_start_loc[0:3])
 		if VERBOSE == True:
-			print('Finished PRM for Shot Planning')
+			print('Finished PRM')
 		#If PRM failed, just return nothing
 		if path_sampled == -1:
 			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
@@ -479,8 +479,6 @@ def solve(inputconfig,VERBOSE = False):
 		ALREADY_SOLVED_PATHS[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
 		return path_sampled,cost_to_go
 
-	#def finishedRobotAvoidShots(location,node):
-		# Run A* over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
 
 	def findPathAndCost(robot_cfg, current_position, shot,parent_node):
 		if shot is None:
@@ -770,9 +768,9 @@ def solve(inputconfig,VERBOSE = False):
 				current = current.parent
 			for element in range(0,len(robot_paths)):
 				SOLVED_CONFIG['robots'][element]['path'] = robot_paths[element][::-1]
-				if SOLVED_CONFIG['robots'][element]['path'] != [] and robot_paths[robot.identity][-1][2] != end_time:
+				if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][3] != end_time:
 					if VERBOSE == True:
-						print('Starting PRM to keep Robot out of Shots...')
+						print('Starting PRM to keep Robot out of Shots...') # Run PRM_Modified over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
 					SOLVED_CONFIG['robots'][element]['path'].extend(PRM_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1]))
 					if VERBOSE == True:
 						print('Finished PRM')
@@ -780,6 +778,7 @@ def solve(inputconfig,VERBOSE = False):
 				SOLVED_CONFIG['robots'][element]['path'] = [[p[0],p[1],p[3]] for p in SOLVED_CONFIG['robots'][element]['path']]
 				if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][2] < end_time:
 					SOLVED_CONFIG['robots'][element]['path'].append(SOLVED_CONFIG['robots'][element]['path'][-1][0:2] + [end_time])
+					#print('adding time')
 				#print(SOLVED_CONFIG['robots'][element]['path'])	#debug
 			for robotNum in range(0,len(SOLVED_CONFIG['robots'])):
 				if SOLVED_CONFIG['robots'][robotNum]['path'] == []:
@@ -820,13 +819,13 @@ def solve(inputconfig,VERBOSE = False):
 config = yaml.safe_load(open('rocky.yaml','r'))
 #print(findPointOnPathAndSlope(config['actor']['path'],5))
 #print(findPointOnPathAndSlope(config['actor']['path'],8))
-SOLVED_CONFIG = solve(config)
+SOLVED_CONFIG = solve(config,VERBOSE = True)
 with open('errors.yaml', 'w') as yaml_file:
 	yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
 #visualize(SOLVED_CONFIG)
 #config = yaml.safe_load(open('result_working.yaml', 'r'))
 #visualize(config)
 #config = yaml.safe_load(open('result_working2.yaml', 'r'))
-visualize(SOLVED_CONFIG,show_path=True)
+visualize(SOLVED_CONFIG,show_path = False)
 #config = yaml.safe_load(open('result.yaml', 'r'))
 #visualize(config,'demo.gif')
