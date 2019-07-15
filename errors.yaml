@@ -15,7 +15,7 @@ actor:
     - 8
   timestep_resolution: 0.1
 animation:
-  fps: 20
+  fps: 30
   in_shot: red
   out_shot: blue
 map:

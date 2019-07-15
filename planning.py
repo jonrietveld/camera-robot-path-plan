@@ -817,15 +817,13 @@ if __name__ == '__main__':
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
 	config = yaml.safe_load(open('rocky.yaml','r'))
-	#print(findPointOnPathAndSlope(config['actor']['path'],5))
-	#print(findPointOnPathAndSlope(config['actor']['path'],8))
 	SOLVED_CONFIG = solve(config,VERBOSE = False)
-	with open('errors.yaml', 'w') as yaml_file:
-		yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
+	#with open('errors.yaml', 'w') as yaml_file:
+	#	yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
 	#visualize(SOLVED_CONFIG)
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
 	#config = yaml.safe_load(open('result_working2.yaml', 'r'))
-	visualize(SOLVED_CONFIG,show_path = False)
+	visualize(SOLVED_CONFIG,'avoid_shots.gif',show_path = False)
 	#config = yaml.safe_load(open('result.yaml', 'r'))
 	#visualize(config,'demo.gif')

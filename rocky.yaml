@@ -21,7 +21,7 @@ actor:
   color: 'red'
 
 animation:
-  fps: 20                                                # Number of frames per second for animation - Does not effect solving time
+  fps: 30                                                # Number of frames per second for animation - Does not effect solving time
   in_shot: 'red'
   out_shot: 'blue'
 
