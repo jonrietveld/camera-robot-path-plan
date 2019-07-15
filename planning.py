@@ -71,7 +71,7 @@ def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 	return concatVect
 
 # Find the field of view rays for the robot wrt its config. (needs to be adjusted for shot)
-def findFovRays(roboSlope,robot_num,rotatePoint,shot = None):
+def findFovRays(roboSlope,robot_num,rotatePoint,config,shot = None):
 	if shot is None:
 		camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
 	else:
@@ -114,7 +114,7 @@ def visualize(config, saveName=None, show_path = False):
 				if 'path' in config['robots'][robot]:
 					if not config['robots'][robot]['path'] == None:
 						ptOnPath,slope = findPointOnPathAndSlope(config['robots'][robot]['path'],(1.0/config['animation']['fps'])*i)
-						fovRays,camDirectionUnit = findFovRays(slope,robot,ptOnPath)
+						fovRays,camDirectionUnit = findFovRays(slope,robot,ptOnPath,config)
 						fovFill[robot].set_xy(fovRays)
 						roboLocArr[robot].set_data(ptOnPath[0],ptOnPath[1])
 						segmentArr[robot].set_data([actorPtOnPath[0],ptOnPath[0]],[actorPtOnPath[1],ptOnPath[1]])
@@ -128,7 +128,7 @@ def visualize(config, saveName=None, show_path = False):
 								if insidePoly:
 									roboShot[2*(robot*len(config['shots']) + shotnum)].set_xy(shotarr)
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy([[0,0]])
-									fovRays,_ = findFovRays(slope,robot,ptOnPath,shot)
+									fovRays,_ = findFovRays(slope,robot,ptOnPath,config,shot)
 									fovFill[robot].set_xy(fovRays)
 								else:
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy(shotarr)
@@ -210,7 +210,7 @@ def solve(inputconfig,VERBOSE = False):
 	SOLVED_CONFIG = deepcopy(inputconfig)
 	SOLVE_RESOLUTION = SOLVED_CONFIG['solve']['resolution']
 	ALREADY_SOLVED_PATHS = {}
-	IMG = imageio.imread(config['map']['path'])
+	IMG = imageio.imread(SOLVED_CONFIG['map']['path'])
 	IMG = [[int(abs(xpoint) > 0) for xpoint in ypoint] for ypoint in IMG]
 
 	def isValidPath(path,node):
@@ -224,7 +224,7 @@ def solve(inputconfig,VERBOSE = False):
 					for test_roboPos in path:
 						if assigned_robot_path[0][2] <= test_roboPos[2] <= assigned_robot_path[-1][2]:
 							planned_pathPos,theta_planned = findPointOnPathAndSlope(assigned_robot_path,test_roboPos[2])
-							fovPoly = findFovRays(theta_planned,robot.identity,planned_pathPos,robot.given_shot)[0]
+							fovPoly = findFovRays(theta_planned,robot.identity,planned_pathPos,SOLVED_CONFIG,robot.given_shot)[0]
 							insidePoly = mplpath.Path(fovPoly).contains_points([test_roboPos[0:2]])
 							if insidePoly[0]:
 								return False,robot.given_shot
@@ -812,20 +812,20 @@ def solve(inputconfig,VERBOSE = False):
 	return SOLVED_CONFIG
 
 
-
-#read config file
-#config = yaml.safe_load(open('result_working.yaml', 'r'))
-#visualize(config)
-config = yaml.safe_load(open('rocky.yaml','r'))
-#print(findPointOnPathAndSlope(config['actor']['path'],5))
-#print(findPointOnPathAndSlope(config['actor']['path'],8))
-SOLVED_CONFIG = solve(config,VERBOSE = True)
-with open('errors.yaml', 'w') as yaml_file:
-	yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
-#visualize(SOLVED_CONFIG)
-#config = yaml.safe_load(open('result_working.yaml', 'r'))
-#visualize(config)
-#config = yaml.safe_load(open('result_working2.yaml', 'r'))
-visualize(SOLVED_CONFIG,show_path = False)
-#config = yaml.safe_load(open('result.yaml', 'r'))
-#visualize(config,'demo.gif')
+if __name__ == '__main__':
+	#read config file
+	#config = yaml.safe_load(open('result_working.yaml', 'r'))
+	#visualize(config)
+	config = yaml.safe_load(open('rocky.yaml','r'))
+	#print(findPointOnPathAndSlope(config['actor']['path'],5))
+	#print(findPointOnPathAndSlope(config['actor']['path'],8))
+	SOLVED_CONFIG = solve(config,VERBOSE = False)
+	with open('errors.yaml', 'w') as yaml_file:
+		yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
+	#visualize(SOLVED_CONFIG)
+	#config = yaml.safe_load(open('result_working.yaml', 'r'))
+	#visualize(config)
+	#config = yaml.safe_load(open('result_working2.yaml', 'r'))
+	visualize(SOLVED_CONFIG,show_path = False)
+	#config = yaml.safe_load(open('result.yaml', 'r'))
+	#visualize(config,'demo.gif')
