@@ -24,7 +24,7 @@ $ git clone https://github.com/jonrietveld/camera-robot-path-plan.git
 
 # Usage
 ## Yaml creation
-Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,turn_radius,time). The turning radius is need to interpolate along the actor's path with a dubins path.
+Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,turn_radius,time). The turning radius is needed to interpolate along the actor's path with a dubins path.
 ## Running
 Place planning.py in the same directory as your program to be able to import it.
 

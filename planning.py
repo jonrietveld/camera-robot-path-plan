@@ -21,13 +21,12 @@ import random
 '''Shared functions'''
 #######################################################################################################################
 # Find point on segment joining two closest points in array given. Find this point at given time.
-def findPointOnPathAndSlope(pathArr,time):
+def findPointOnPathAndSlope(pathArr,time,config = None):
 	#find closest point time on path below given time through linear interpolation
-	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[2]-time)))   
-	time = round(time, 10) 
-	if time - round(pathArr[closeTime][2],10) <= 0:									#finds closest point below given time and uses it's timestamp
+	closeTime = pathArr.index(min(pathArr,key=lambda x: abs(x[-1]-time)))   
+	if 0 < time < pathArr[closeTime][-1]:									#finds closest point below given time and uses it's timestamp
 		closeTime = closeTime - 1
-	if closeTime == pathArr[len(pathArr)-1][2]:
+	if closeTime == len(pathArr) - 1:
 		closeTime -= 1
 	
 	slope = [pathArr[closeTime+1][0]-pathArr[closeTime][0], pathArr[closeTime+1][1]-pathArr[closeTime][1]]
@@ -36,12 +35,28 @@ def findPointOnPathAndSlope(pathArr,time):
 	else:
 		slope = np.array(slope)/(np.array(slope)**2).sum()**.5					#Convert slope to unit vector
 	
-	if pathArr[closeTime][2] == time: 										#If requested time is in array, just return that point 
-		return [pathArr[closeTime][0],pathArr[closeTime][1]],slope
-	#use time to find point on line
-	q = (time-pathArr[closeTime][2])/(pathArr[closeTime+1][2]-pathArr[closeTime][2])
-	intersect = (1-q)*np.array(pathArr[closeTime][0:2]) + q*np.array(pathArr[closeTime+1][0:2])
-	intersect = np.insert(intersect,2,time)
+	if time - pathArr[closeTime][-1] < 0.001: 										#If requested time is in array, just return that point 
+		#print('equal',time)
+		if len(pathArr[0]) == 5:
+			#print('actor')
+			slope = [cos(pathArr[closeTime][2]),sin(pathArr[closeTime][2])]
+		return [pathArr[closeTime][0],pathArr[closeTime][1],time],slope
+	#If this path array is the actors, first find dubins path and linearly interpolate between points on dubins path.
+	if len(pathArr[0]) == 5:
+		#print('actor')
+		shortest_path = dubins.shortest_path(pathArr[closeTime][0:3],pathArr[closeTime+1][0:3], pathArr[closeTime][3]).sample_many((1.0/7)*config['solve']['resolution'])[0]
+		# Add timesteps to dubins path
+		time_increment = (pathArr[closeTime+1][-1] - pathArr[closeTime][-1])/len(shortest_path)
+		for loc in range(len(shortest_path)):
+			shortest_path[loc] = list(shortest_path[loc])
+			shortest_path[loc].append((loc + 1) * time_increment + pathArr[closeTime][-1])
+		#print(time_increment)
+		intersect,slope = findPointOnPathAndSlope(shortest_path,time,config)
+	else:
+		#use time to find point on line from linear interpolation
+		q = (time-pathArr[closeTime][-1])/(pathArr[closeTime+1][-1]-pathArr[closeTime][-1])
+		intersect = (1-q)*np.array(pathArr[closeTime][0:2]) + q*np.array(pathArr[closeTime+1][0:2])
+		intersect = np.insert(intersect,2,time)
 	return intersect,slope
 
 # Rotate a point counterclockwise by a given angle around a given origin.
@@ -107,13 +122,13 @@ def visualize(config, saveName=None, show_path = False):
 		#Set actor point for 'i' timestep
 		time = round((1.0/config['animation']['fps'])*i,10)
 		if not config['actor']['path'] == None:
-			actorPtOnPath,actorSlope = findPointOnPathAndSlope(config['actor']['path'],time)
+			actorPtOnPath,actorSlope = findPointOnPathAndSlope(config['actor']['path'],time,config)
 			actorPt.set_data(actorPtOnPath[0],actorPtOnPath[1])
 			#Set each robot's point and line connecting it to the actor for each 'i' timestep
 			for robot in range(0,len(roboLocArr)):
 				if 'path' in config['robots'][robot]:
 					if not config['robots'][robot]['path'] == None:
-						ptOnPath,slope = findPointOnPathAndSlope(config['robots'][robot]['path'],(1.0/config['animation']['fps'])*i)
+						ptOnPath,slope = findPointOnPathAndSlope(config['robots'][robot]['path'],(1.0/config['animation']['fps'])*i,config)
 						fovRays,camDirectionUnit = findFovRays(slope,robot,ptOnPath,config)
 						fovFill[robot].set_xy(fovRays)
 						roboLocArr[robot].set_data(ptOnPath[0],ptOnPath[1])
@@ -159,11 +174,26 @@ def visualize(config, saveName=None, show_path = False):
 		ax1.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
 		res1 = ax1.imshow(img1,cmap="gray",extent=[0, config['map']['width'], 0, config['map']['height']]) #gray
 		res1.set_clim(0,1)
+		# Draw robot path
 		for identity,robot in enumerate(config['robots']):
 			if 'path' in robot:
 				x = np.array([pathpoint[0] for pathpoint in robot['path']])
 				y = np.array([pathpoint[1] for pathpoint in robot['path']])
 				ax1.plot(x, y, label= "Robot {}".format(identity))
+		# Draw actor path
+		actor_path = []
+		for actor_pt in range(len(config['actor']['path'])-1):
+			actor_path += dubins.shortest_path(config['actor']['path'][actor_pt][0:3], config['actor']['path'][actor_pt+1][0:3], config['actor']['path'][actor_pt][3]).sample_many(config['solve']['resolution'])[0]
+		# Link timesteps in graph to make reading easier
+		for timestep in np.linspace(config['actor']['path'][0][-1],config['actor']['path'][-1][-1],10):
+			actorPt,_ = findPointOnPathAndSlope(config['actor']['path'],timestep,config)
+			for robot in config['robots']:
+				robopt,_ = findPointOnPathAndSlope(robot['path'],timestep)
+				angle = atan2(robopt[1] - actorPt[1],robopt[0] - actorPt[0])
+				ax1.plot([actorPt[0],robopt[0]-cos(angle)/2.0],[actorPt[1],robopt[1]-sin(angle)/2.0],color = 'k',alpha = 0.5,ls = '--',marker = (3,0,degrees(angle) - 90),markevery = [1])
+		ax1.plot([pathpoint[0] for pathpoint in actor_path], [pathpoint[1] for pathpoint in actor_path], label= "Actor".format(identity))
+
+
 		ax1.legend()
 	fig, ax = plt.subplots()
 	ax.set(xlim=(0, config['map']['width']), ylim=(0, config['map']['height']))
@@ -175,7 +205,6 @@ def visualize(config, saveName=None, show_path = False):
 	segmentArr = []
 	fovFill = []
 	roboShot = []
-	actorPt, = ax.plot(0,0,marker='o',c=config['actor']['color'],label = 'Actor')
 	for identity,robot in enumerate(config['robots']):
 		segment, = ax.plot([],[],c=(0,0,0,.5))
 		pt, = ax.plot([],[],marker='o',c=robot['color'], label = 'Robot {}'.format(identity))
@@ -188,12 +217,13 @@ def visualize(config, saveName=None, show_path = False):
 			ax.add_patch(roboShot[len(roboShot)-1])
 		roboLocArr.append(pt)
 		segmentArr.append(segment)
+	actorPt, = ax.plot(0,0,marker='o',c=config['actor']['color'],label = 'Actor')
 	ax.legend(loc = 'upper right') 
 	#Setup animation
 	if not config['actor']['path'] == None:
-		maxtime = max(config['actor']['path'],key=lambda x: x[2])
+		maxtime = max(config['actor']['path'],key=lambda x: x[-1])
 		interval=1000.0/config['animation']['fps']
-		frames = config['animation']['fps']*maxtime[2]
+		frames = config['animation']['fps']*maxtime[-1]
 		ani = animation.FuncAnimation(fig, update, frames = frames, interval=interval, blit = True)
 
 	#run/save animation
@@ -207,7 +237,9 @@ def visualize(config, saveName=None, show_path = False):
 
 def solve(inputconfig,VERBOSE = False):
 	print('Solving config...')
+	START_TIME = time.process_time()
 	SOLVED_CONFIG = deepcopy(inputconfig)
+	END_TIME = SOLVED_CONFIG['actor']['path'][-1][-1]
 	SOLVE_RESOLUTION = SOLVED_CONFIG['solve']['resolution']
 	ALREADY_SOLVED_PATHS = {}
 	IMG = imageio.imread(SOLVED_CONFIG['map']['path'])
@@ -215,15 +247,15 @@ def solve(inputconfig,VERBOSE = False):
 
 	def isValidPath(path,node):
 		current = node
-		if len(path[0]) == 4:
-			path = [[element[0],element[1],element[3]] for element in path]
+		if len(path[0]) == 4 or len(path[0]) == 5:
+			path = [[element[0],element[1],element[-1]] for element in path]
 		while current != None:
 			for robot in current.assigned_robots:
 				if type(robot.given_shot) == dict and len(robot.path) > 0:
 					assigned_robot_path = [[p[0],p[1],p[3]] for p in robot.path]
 					for test_roboPos in path:
 						if assigned_robot_path[0][2] <= test_roboPos[2] <= assigned_robot_path[-1][2]:
-							planned_pathPos,theta_planned = findPointOnPathAndSlope(assigned_robot_path,test_roboPos[2])
+							planned_pathPos,theta_planned = findPointOnPathAndSlope(assigned_robot_path,test_roboPos[2],SOLVED_CONFIG)
 							fovPoly = findFovRays(theta_planned,robot.identity,planned_pathPos,SOLVED_CONFIG,robot.given_shot)[0]
 							insidePoly = mplpath.Path(fovPoly).contains_points([test_roboPos[0:2]])
 							if insidePoly[0]:
@@ -373,7 +405,7 @@ def solve(inputconfig,VERBOSE = False):
 				if goal is not None:
 					timestep_increment = (shot['start_time']-start[3])/len(path)
 				else:
-					timestep_increment = (SOLVED_CONFIG['actor']['path'][-1][2] - start[3])/len(path)
+					timestep_increment = (SOLVED_CONFIG['actor']['path'][-1][-1] - start[3])/len(path)
 				for pos in range(len(path)):
 					if goal is not None and (pos+1)*timestep_increment + start[3] == shot['start_time']:
 						del path[pos]
@@ -421,8 +453,27 @@ def solve(inputconfig,VERBOSE = False):
 				if cur_shot == shot:
 					shot1 = cur_shot_num + 1
 				if cur_shot == return_shot:
-					shot2 == cur_shot_num + 1
+					shot2 = cur_shot_num + 1
 			print('Error: Shot {} overlaps with shot {}. (shots are not zero indexed)'.format(shot1,shot2))
+			error_parent = deepcopy(parent_node)
+			path_sampled = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+
+			#Add on timesteps to dubens path
+			timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
+			for pos in range(len(path_sampled)):
+				path_sampled[pos] = list(path_sampled[pos])
+				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
+
+			for bot in error_parent.unassigned_robots:
+				if bot.robot_cfg == robot_cfg:
+					save_bot = deepcopy(bot)
+					print('removed')
+					error_parent.unassigned_robots.remove(bot)
+			save_bot.path = path_sampled
+			save_bot.given_shot = shot
+			save_bot.position = shot_start_loc
+			error_parent.assigned_robots.append(save_bot)
+			visualize(finish(error_parent))
 			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
 			return [],-1
 
@@ -479,7 +530,6 @@ def solve(inputconfig,VERBOSE = False):
 		ALREADY_SOLVED_PATHS[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
 		return path_sampled,cost_to_go
 
-
 	def findPathAndCost(robot_cfg, current_position, shot,parent_node):
 		if shot is None:
 			return [],0
@@ -487,7 +537,7 @@ def solve(inputconfig,VERBOSE = False):
 			return [],0
 
 		#calculate ctg from starting position to shot start
-		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],shot['start_time'])
+		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],shot['start_time'],SOLVED_CONFIG)
 		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 		shot_start_loc = np.append(shot_start_loc, shot['start_time'])
@@ -515,28 +565,12 @@ def solve(inputconfig,VERBOSE = False):
 		if not time_arr[-1] == shot['end_time']:
 			time_arr = np.append(time_arr,shot['end_time'])
 		for time in time_arr:
-			actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],time)
+			actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],time,SOLVED_CONFIG)
 			current_position = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 			current_position = np.append(current_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 			current_position = np.append(current_position, time)
 			# Check if the path the robot is taking is possible with its turning constraints.
 
-			def get_intersect(a1, a2, b1, b2):
-			    """ 
-			    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
-			    a1: [x, y] a point on the first line
-			    a2: [x, y] another point on the first line
-			    b1: [x, y] a point on the second line
-			    b2: [x, y] another point on the second line
-			    """
-			    s = np.vstack([a1,a2,b1,b2])        # s for stacked
-			    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
-			    l1 = np.cross(h[0], h[1])           # get first line
-			    l2 = np.cross(h[2], h[3])           # get second line
-			    x, y, z = np.cross(l1, l2)          # point of intersection
-			    if z == 0:                          # lines are parallel
-			        return (float('inf'), float('inf'))
-			    return (x/z, y/z)
 
 
 			#if len(following_actor) == 0:
@@ -582,6 +616,44 @@ def solve(inputconfig,VERBOSE = False):
 		#print(path_sampled)
 		total_path = path_sampled + following_actor
 		return total_path,cost_to_go
+
+	def finish(current_node):
+		robot_paths = []
+		for robot in SOLVED_CONFIG['robots']:
+			robot_paths.append([])
+		current = current_node
+		added_shots = []	#Keep track of which shots have already been added to path to avoid duplicate adds
+		while current is not None:
+			#print('available_shots',current.available_shots)	#debug
+			#for robot in current.robots:
+				#print(robot.identity,robot.given_shot,current.parent)	#debug
+			for robot in current.assigned_robots:
+				#print(robot.identity,robot.given_shot,current.parent)
+				if robot.given_shot in added_shots:
+					continue
+				added_shots.append(robot.given_shot)
+				for position in robot.path[::-1]:
+					robot_paths[robot.identity].append(position)
+			current = current.parent
+		for element in range(0,len(robot_paths)):
+			SOLVED_CONFIG['robots'][element]['path'] = robot_paths[element][::-1]
+			if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][3] != END_TIME:
+				if VERBOSE == True:
+					print('Starting PRM to keep Robot out of Shots...') # Run PRM_Modified over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
+				SOLVED_CONFIG['robots'][element]['path'].extend(PRM_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1]))
+				if VERBOSE == True:
+					print('Finished PRM')
+					SOLVED_CONFIG['robots'][element]['path'] = [[p[0],p[1],p[3]] for p in SOLVED_CONFIG['robots'][element]['path']]
+			if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][2] < END_TIME:
+				SOLVED_CONFIG['robots'][element]['path'].append(SOLVED_CONFIG['robots'][element]['path'][-1][0:2] + [END_TIME])
+				#print('adding time')
+			#print(SOLVED_CONFIG['robots'][element]['path'])	#debug
+		for robotNum in range(0,len(SOLVED_CONFIG['robots'])):
+			if SOLVED_CONFIG['robots'][robotNum]['path'] == []:
+				del SOLVED_CONFIG['robots'][robotNum]['path']
+		#return with solution
+		print('Solution Found in {} seconds.'.format(time.process_time() - START_TIME))
+		return SOLVED_CONFIG
 
 	class Robot():
 
@@ -680,23 +752,23 @@ def solve(inputconfig,VERBOSE = False):
 				#print([[robot.given_shot,type(robot.given_shot)] for robot in self.assigned_robots])
 				new_node = deepcopy(self)
 				new_node.parent = self
-				end_time_arr = [robot.given_shot['end_time'] for robot in new_node.assigned_robots if type(robot.given_shot) == dict]
-				if len(end_time_arr) == 0:
-					end_time_arr.append(0)
-				min_end_time = min(end_time_arr)
+				END_TIME_arr = [robot.given_shot['end_time'] for robot in new_node.assigned_robots if type(robot.given_shot) == dict]
+				if len(END_TIME_arr) == 0:
+					END_TIME_arr.append(0)
+				min_END_TIME = min(END_TIME_arr)
 				#print("given_shot")
 				#for robot in self.assigned_robots:
 				#	print(robot.given_shot)
 				#print('allRobots:')
 				#for robot in self.robots:
 				#	print(robot.given_shot)
-				#print("Min end time: ",min_end_time)
+				#print("Min end time: ",min_END_TIME)
 				
-				new_node.time = min_end_time
+				new_node.time = min_END_TIME
 				for robot in new_node.assigned_robots:
 					if not type(robot.given_shot) == dict:
 						continue
-					elif robot.given_shot['end_time'] == min_end_time:
+					elif robot.given_shot['end_time'] == min_END_TIME:
 						robot.given_shot = None
 						new_node.unassigned_robots.append(robot)
 						new_node.assigned_robots.remove(robot)
@@ -716,7 +788,6 @@ def solve(inputconfig,VERBOSE = False):
 		def __eq__(self, other):
 			return self.__hash__() == other.__hash__()
 
-	startTime = time.process_time()
 
 	#A* algorithm
 	#Initialize lists/heaps/dictionaries and endtime
@@ -724,7 +795,6 @@ def solve(inputconfig,VERBOSE = False):
 	heapq.heapify(open_list)
 	open_list_dict = {}
 	closed_list = set(())
-	end_time = SOLVED_CONFIG['actor']['path'][-1][2]
 
 	#Add first robot to the heap
 	startRobotList = []
@@ -748,44 +818,8 @@ def solve(inputconfig,VERBOSE = False):
 		closed_list.add(current_node)
 
 
-		if current_node.time == end_time and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
-			robot_paths = []
-			for robot in SOLVED_CONFIG['robots']:
-				robot_paths.append([])
-			current = current_node
-			added_shots = []	#Keep track of which shots have already been added to path to avoid duplicate adds
-			while current is not None:
-				#print('available_shots',current.available_shots)	#debug
-				#for robot in current.robots:
-					#print(robot.identity,robot.given_shot,current.parent)	#debug
-				for robot in current.assigned_robots:
-					#print(robot.identity,robot.given_shot,current.parent)
-					if robot.given_shot in added_shots:
-						continue
-					added_shots.append(robot.given_shot)
-					for position in robot.path[::-1]:
-						robot_paths[robot.identity].append(position)
-				current = current.parent
-			for element in range(0,len(robot_paths)):
-				SOLVED_CONFIG['robots'][element]['path'] = robot_paths[element][::-1]
-				if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][3] != end_time:
-					if VERBOSE == True:
-						print('Starting PRM to keep Robot out of Shots...') # Run PRM_Modified over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
-					SOLVED_CONFIG['robots'][element]['path'].extend(PRM_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1]))
-					if VERBOSE == True:
-						print('Finished PRM')
-
-				SOLVED_CONFIG['robots'][element]['path'] = [[p[0],p[1],p[3]] for p in SOLVED_CONFIG['robots'][element]['path']]
-				if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][2] < end_time:
-					SOLVED_CONFIG['robots'][element]['path'].append(SOLVED_CONFIG['robots'][element]['path'][-1][0:2] + [end_time])
-					#print('adding time')
-				#print(SOLVED_CONFIG['robots'][element]['path'])	#debug
-			for robotNum in range(0,len(SOLVED_CONFIG['robots'])):
-				if SOLVED_CONFIG['robots'][robotNum]['path'] == []:
-					del SOLVED_CONFIG['robots'][robotNum]['path']
-			#return with solution
-			print('Solution Found in {} seconds.'.format(time.process_time() - startTime))
-			return SOLVED_CONFIG
+		if current_node.time == END_TIME and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
+			return finish(current_node)
 		
 		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
 			if child_node in closed_list or child_node in open_list:
@@ -816,14 +850,14 @@ if __name__ == '__main__':
 	#read config file
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
-	config = yaml.safe_load(open('rocky.yaml','r'))
-	SOLVED_CONFIG = solve(config,VERBOSE = False)
+	config = yaml.safe_load(open('errors.yaml','r'))
+	SOLVED_CONFIG = solve(config,VERBOSE = True)
 	#with open('errors.yaml', 'w') as yaml_file:
 	#	yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
 	#visualize(SOLVED_CONFIG)
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
 	#config = yaml.safe_load(open('result_working2.yaml', 'r'))
-	visualize(SOLVED_CONFIG,'avoid_shots.gif',show_path = False)
+	visualize(SOLVED_CONFIG,show_path = True)
 	#config = yaml.safe_load(open('result.yaml', 'r'))
 	#visualize(config,'demo.gif')
