@@ -11,9 +11,10 @@ This is a planning algorithm for planning the path of multiple camera equipt dub
 $ python3 planning.py
 ```
 ![Running Example](./avoid_shots.gif)
+![Path](./bad_follow.png)
 # Installation
 Installing libraries:
-```
+``` bash
 $ sudo apt install python3 python3-imageio python3-pip
 $ sudo python3 -m pip install -U matplotlib dubins
 ```
