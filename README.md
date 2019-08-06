@@ -1,5 +1,5 @@
 # Camera-robot-path-plan
-This is a planning algorithm for planning the path of multiple camera equipt dubins (car-like) robots. It plans a path through an obsticle environment for all of the defined robots, and finds the best way to assign each robot to a set of shots using the [A*](https://en.wikipedia.org/wiki/A*_search_algorithm) algorithm. It tries to minimize the distance all of the robots have to travel, while still capturing all shots defined.
+This is a planning algorithm for planning the path of multiple camera equipt dubins (car-like) robots. It plans a path through an obsticle environment for all of the defined robots, and finds the best way to assign each robot to a set of shots using [Dijkstra's algorithm](https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm), and finds the best way to get to a given shot with the [A* search algorithm](https://en.wikipedia.org/wiki/A*_search_algorithm). It tries to minimize the distance all of the robots have to travel, while still capturing all shots defined.
 
 # Table of Contents
 * [Demo](#demo)
@@ -25,7 +25,7 @@ $ git clone https://github.com/jonrietveld/camera-robot-path-plan.git
 
 # Usage
 ## Yaml creation
-Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,turn_radius,time). The turning radius is needed to interpolate along the actor's path with a dubins path.
+Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,time).
 ## Running
 Place planning.py in the same directory as your program to be able to import it.
 
