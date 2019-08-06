@@ -10,8 +10,8 @@ This is a planning algorithm for planning the path of multiple camera equipt dub
 ``` bash
 $ python3 planning.py
 ```
-![Running Example](./avoid_shots.gif)
-![Path](./bad_follow.png)
+![Running Example](./smooth-follow.gif)
+![Path](./smooth-follow.png)
 # Installation
 Installing libraries:
 ``` bash

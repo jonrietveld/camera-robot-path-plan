@@ -73,12 +73,13 @@ def rotate(origin, point, angle_degrees):
 def findShotPolygon(roboLoc,shot,camDir_unit_vect):
 	minShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][0]
 	maxShotDistVect = np.array(camDir_unit_vect) * shot['dist_range'][1]
-	angle_values = np.arange(shot['angle_range'][0] + shot['actor_facing'], shot['angle_range'][1] + shot['actor_facing'], 5) #points every 5 degrees
+	angle_values = np.arange(shot['angle_range'][0], shot['angle_range'][1], 1) #points every 1 degree
+	#angle_values = np.arange(shot['angle_range'][0] + shot['actor_facing'], shot['angle_range'][1] + shot['actor_facing'], 1) #points every 5 degrees
 	minShotVect = []
 	maxShotVect = []
 	for value in angle_values:
-		minShotVect.insert(0,rotate([0,0],minShotDistVect,value))
-		maxShotVect.append(rotate([0,0],maxShotDistVect,value))
+		minShotVect.insert(0,rotate([0,0],minShotDistVect,-value))
+		maxShotVect.append(rotate([0,0],maxShotDistVect,-value))
 	concatVect = []
 	for element in maxShotVect:
 		concatVect.append(element+np.array(roboLoc[0:2]))
@@ -91,7 +92,8 @@ def findFovRays(roboSlope,robot_num,rotatePoint,config,shot = None):
 	if shot is None:
 		camDirectionUnit = rotate([0,0],roboSlope,config['robots'][robot_num]['camera_orientation'])
 	else:
-		camDirectionUnit = rotate([0,0],roboSlope,shot['actor_facing'] + 180)
+		camDirectionUnit = rotate([0,0],roboSlope,shot['actor_facing'] - 180)
+		#camDirectionUnit = rotate([0,0],roboSlope,(sum(shot['angle_range'])/2) + shot['actor_facing'] - 180)
 	camDirectionUnit = (np.array(camDirectionUnit) / (np.array(camDirectionUnit)**2).sum()**0.5)
 	camDirection = camDirectionUnit*(config['map']['height']+config['map']['width'])**2 #Make unit vector longer
 	fovSlopes = [rotate([0,0],camDirection,config['robots'][robot_num]['fov']/2),rotate([0,0],camDirection,-config['robots'][robot_num]['fov']/2)]
@@ -136,15 +138,20 @@ def visualize(config, saveName=None, show_path = False):
 						segmentArr[robot].set_data([actorPtOnPath[0],ptOnPath[0]],[actorPtOnPath[1],ptOnPath[1]])
 						for shotnum,shot in enumerate(config['shots']):
 							if shot['start_time'] <= time <= shot['end_time']:
-								shotarr = findShotPolygon(ptOnPath,shot,camDirectionUnit)
+								#camDirectionUnit = rotate([0,0],slope,shot['actor_facing'])
+								tmpfovRays, tmpCamDirUnit = findFovRays(slope,robot,ptOnPath,config,shot)
+								#print(slope,tmpCamDirUnit)
+								shotarr = findShotPolygon(ptOnPath,shot,tmpCamDirUnit)
 								pathObject = mplpath.Path(shotarr)
 								insidePoly = (pathObject.contains_points([actorPtOnPath[0:2]]))
 								#print(time)
 								
 								if insidePoly:
+
 									roboShot[2*(robot*len(config['shots']) + shotnum)].set_xy(shotarr)
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy([[0,0]])
-									fovRays,_ = findFovRays(slope,robot,ptOnPath,config,shot)
+									#fovRays,_ = findFovRays(slope,robot,ptOnPath,config,shot)
+									fovRays = tmpfovRays
 									fovFill[robot].set_xy(fovRays)
 								else:
 									roboShot[2*(robot*len(config['shots']) + shotnum)+1].set_xy(shotarr)
@@ -181,13 +188,13 @@ def visualize(config, saveName=None, show_path = False):
 			if 'path' in robot:
 				x = np.array([pathpoint[0] for pathpoint in robot['path']])
 				y = np.array([pathpoint[1] for pathpoint in robot['path']])
-				ax1.plot(x, y, label= "Robot {}".format(identity))
+				ax1.plot(x, y, color = robot['color'], label= "Robot {}".format(identity))
 		# Draw actor path
 		#actor_path = []
 		#for actor_pt in range(len(config['actor']['path'])-1):
 		#	actor_path += dubins.shortest_path(config['actor']['path'][actor_pt][0:3], config['actor']['path'][actor_pt+1][0:3], config['actor']['path'][actor_pt][3]).sample_many(config['solve']['resolution'])[0]
 		# Link timesteps in graph to make reading easier
-		ax1.plot([x[0] for x in config['actor']['path']],[y[1] for y in config['actor']['path']], label = "Actor")
+		ax1.plot([x[0] for x in config['actor']['path']],[y[1] for y in config['actor']['path']], color = config['actor']['color'], label = "Actor")
 		for timestep in np.linspace(config['actor']['path'][0][-1],config['actor']['path'][-1][-1],10):
 			actorPt,_ = findPointOnPathAndSlope(config['actor']['path'],timestep,config)
 			for robot in config['robots']:
@@ -263,13 +270,14 @@ def solve(inputconfig,VERBOSE = False):
 		while current != None:
 			for robot in current.assigned_robots:
 				if type(robot.given_shot) == dict and len(robot.path) > 0:
-					assigned_robot_path = [[p[0],p[1],p[3]] for p in robot.path]
+					assigned_robot_path = [[p[0],p[1],p[-1]] for p in robot.path if robot.given_shot['start_time'] < p[-1] < robot.given_shot['end_time']]
 					for test_roboPos in path:
-						if assigned_robot_path[0][2] <= test_roboPos[2] <= assigned_robot_path[-1][2]:
+						if len(assigned_robot_path) > 0 and assigned_robot_path[0][2] < test_roboPos[2] < assigned_robot_path[-1][2]:
 							planned_pathPos,theta_planned = findPointOnPathAndSlope(assigned_robot_path,test_roboPos[2],SOLVED_CONFIG)
 							fovPoly = findFovRays(theta_planned,robot.identity,planned_pathPos,SOLVED_CONFIG,robot.given_shot)[0]
 							insidePoly = mplpath.Path(fovPoly).contains_points([test_roboPos[0:2]])
 							if insidePoly[0]:
+								#print(assigned_robot_path[0][2], test_roboPos,assigned_robot_path[-1][2])
 								return False,robot.given_shot
 			current = current.parent
 		return True,{}
@@ -288,8 +296,9 @@ def solve(inputconfig,VERBOSE = False):
 				self.f = 0
 			def __lt__(self, other):
 				return self.f < other.f
-			#def __repr__(self):
-			#	return 'astar_node({})'.format(self.__hash__())
+			def __repr__(self):
+				#return 'astar_node({},{},{},{},{})'.format(self.position,self.g,self.h,self.f,self.parent)
+				return self.__hash__()
 			def __hash__(self):
 				return hash("astar_node({})".format(self.position))
 		
@@ -310,13 +319,18 @@ def solve(inputconfig,VERBOSE = False):
 					for point in dubins_path:
 						pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
 						pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
-						if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
+						if 0 > pointx or pointx >= len(IMG[0]) or 0 > pointy or pointy >= len(IMG):
 							error = 1
 							break
 						#print(point,pointx,pointy,len(IMG))
+						#try:
 						if not IMG[-pointy][pointx]:
 							error = 1
 							break
+						#except Exception as e:
+						#	print(pointx,pointy)
+							
+						
 					if error == 1:
 						continue
 					dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
@@ -357,6 +371,7 @@ def solve(inputconfig,VERBOSE = False):
 		#print(point_array)
 		if goal is not None:
 			point_array.append(goal)
+
 		#Create a dictionary of points which have as indices all the points they connect to with the path length
 		#directed_graph = {}
 		#for current_point in point_array:
@@ -397,7 +412,11 @@ def solve(inputconfig,VERBOSE = False):
 		timeout = time.process_time()
 		while len(open_list_prm) > 0 and time.process_time() - timeout < aStar_Timeout:
 			current_node_prm = heapq.heappop(open_list_prm)
+			#if goal is not None:
+			#if tuple(current_node_prm.position[0:3]) != tuple(goal[0:3]):
 			closed_list_prm.add(current_node_prm)
+			if len(open_list_dict_prm) > 0 and current_node_prm in open_list_dict_prm:
+				del open_list_dict_prm[current_node_prm]
 			if goal is not None and tuple(current_node_prm.position) == tuple(goal) or goal is None: #If goal position reached, then check if valid solution and return if it is.
 				current = current_node_prm
 				# Print out a possible array of locations to travel avoiding obsticles (next check if it avoids shots)
@@ -428,6 +447,9 @@ def solve(inputconfig,VERBOSE = False):
 				if goal is not None:
 					timestep_increment = (shot['start_time']-start[-1])/len(path)
 				else:
+					if len(path) == 1:
+						for i in np.arange(start[-1],SOLVED_CONFIG['actor']['path'][-1][-1],SOLVED_CONFIG['actor']['timestep_resolution']):
+							path.append(path[0])
 					timestep_increment = (SOLVED_CONFIG['actor']['path'][-1][-1] - start[-1])/len(path)
 				for pos in range(len(path)):
 					if goal is not None and (pos+1)*timestep_increment + start[-1] == shot['start_time']:
@@ -437,9 +459,11 @@ def solve(inputconfig,VERBOSE = False):
 						path[pos] = list(path[pos])
 						path[pos].append((pos+1)*timestep_increment+start[3])
 				if isValidPathToShot(path,parent_node)[0]:
+					if VERBOSE == True:
+						print('Suceeded: ',path)
 					return path
 				if VERBOSE == True:
-					print('Failed')
+					print('Not vaild path, keep trying...')
 			else: #Otherwise we are solving for trajectories to get robot out of shot
 				pass
 
@@ -452,14 +476,22 @@ def solve(inputconfig,VERBOSE = False):
 				child_node_prm.f = child_node_prm.g + child_node_prm.h
 				if child_node_prm in open_list_dict_prm:
 					if child_node_prm.g >= open_list_dict_prm[child_node_prm]:
+						#if goal is not None or current_node_prm.position == child_node_prm.position:
+						#if child_node_prm.position[0] == 30.06477879236698:
 						continue
+				if goal is None and current_node_prm.position == child_node_prm.position:
+					continue
+				#print(child_node_prm)
+
 				open_list_dict_prm[child_node_prm] = child_node_prm.g
 				heapq.heappush(open_list_prm, child_node_prm)
 		#If no solution is found by A* return -1
 		if time.process_time() - timeout < aStar_Timeout:
-			print('No solution to PRM')
+			if VERBOSE == True:
+				print('No solution to PRM')
 		else:
-			print('PRM timeout hit')
+			if VERBOSE == True:
+				print('PRM timeout hit')
 		return -1
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
@@ -498,8 +530,8 @@ def solve(inputconfig,VERBOSE = False):
 			#save_bot.position = shot_start_loc
 			#error_parent.assigned_robots.append(save_bot)
 			#visualize(finish(error_parent))
-			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
-			return [],-1
+			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-50
+			return [],-50
 
 		#Check if a direct dubins path is valid, and if it is, just return that path
 		#if SOLVED_CONFIG['solve']['algorithm'] == 'dubins':
@@ -509,36 +541,66 @@ def solve(inputconfig,VERBOSE = False):
 		#	path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'],SOLVE_RESOLUTION)
 
 		#Add on timesteps to dubens path
-		timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
+		timestep_increment = (shot['start_time']-current_position[-1])/len(path_sampled)
 		delete_number = 0
 		for pos in range(len(path_sampled)):
 			pos = pos - delete_number
-			if (pos+1)*timestep_increment + current_position[3] == shot['start_time']:
+			if (pos+1)*timestep_increment + current_position[-1] == shot['start_time']:
 				del path_sampled[pos]
 				delete_number += 1
 				continue
 			else:
 				path_sampled[pos] = list(path_sampled[pos])
-				path_sampled[pos].append((pos+1)*timestep_increment+current_position[3])
+				path_sampled[pos].append((pos+1)*timestep_increment+current_position[-1])
 
 		cost_to_go = 1*SOLVE_RESOLUTION*len(path_sampled)
 
 		#Check to see if direct path passes over obsticles in environment png file
 		error_test = 0
 		for point in path_sampled:
-			if error_test == 1:
-				break
 			pointx = int(point[0] * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
 			pointy = int(point[1] * len(IMG) / float(SOLVED_CONFIG['map']['height']))
 			if 0 >= pointx or pointx >= len(IMG[0]) or 0 >= pointy or pointy >= len(IMG):
-						error = 1
-						break
-			if not IMG[-pointy][pointx]:
+				if VERBOSE == True:
+					print('Outside of boundary.')
 				error_test = 1
+				break
+			if not IMG[-pointy][pointx]:
+				if VERBOSE == True:
+					print('Hit object.')
+				error_test = 1
+				break
 
-		if isValidPathToShot(path_sampled,parent_node)[0] and error_test != 1:
-			ALREADY_SOLVED_PATHS[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
-			return path_sampled,cost_to_go
+		valid,return_shot = isValidPathToShot(path_sampled,parent_node)
+		if error_test == 0 and valid:
+			pathx = [pathx[0] for pathx in path_sampled]
+			pathy = [pathy[1] for pathy in path_sampled]
+			patht = [patht[-1] for patht in path_sampled]
+			xp = []
+			yp = []
+			tp = []
+			for time_path in range(len(path_sampled)):
+				time_index = time_path
+				if time_index == len(path_sampled) - 1:
+					time_index -= 1
+				xp.append(pathx[(time_index + 1)] - pathx[time_index])
+				yp.append(pathy[(time_index + 1)] - pathy[time_index])
+				tp.append(patht[(time_index + 1)] - patht[time_index])
+			xp = np.array(xp)
+			yp = np.array(yp)
+			tp = np.array(tp)
+			meterPerSec = sqrt(xp[time_path]**2 + yp[time_path]**2)/tp[time_path]
+			if meterPerSec > robot_cfg['max_speed']:
+				ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
+				if VERBOSE == True:
+					print('Cannot get to shot, need speed {}.'.format(meterPerSec))
+				return [],-1
+			else:
+				ALREADY_SOLVED_PATHS[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
+				return path_sampled,cost_to_go
+		else:
+			if VERBOSE == True:
+				print('Path to get to shot {} intersects with shot {}.'.format(shot,return_shot))
 
 
 		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
@@ -553,6 +615,26 @@ def solve(inputconfig,VERBOSE = False):
 		if path_sampled == -1:
 			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
 			return [],-1
+		else:
+			pathx = [pathx[0] for pathx in path_sampled]
+			pathy = [pathy[1] for pathy in path_sampled]
+			patht = [patht[-1] for patht in path_sampled]
+			xp = []
+			yp = []
+			tp = []
+			for time_path in range(len(path_sampled)):
+				time_index = time_path
+				if time_index == len(path_sampled) - 1:
+					time_index -= 1
+				xp.append(pathx[(time_index + 1)] - pathx[time_index])
+				yp.append(pathy[(time_index + 1)] - pathy[time_index])
+				tp.append(patht[(time_index + 1)] - patht[time_index])
+				meterPerSec = sqrt(xp[time_path]**2 + yp[time_path]**2)/tp[time_path]
+				if meterPerSec > robot_cfg['max_speed']:
+					ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
+					if VERBOSE == True:
+						print('Cannot get to shot, need speed {}. Robot CFG = {}'.format(meterPerSec,robot_cfg))
+					return [],-1
 		cost_to_go = 1*SOLVE_RESOLUTION*len(path_sampled)
 		
 		ALREADY_SOLVED_PATHS[already_solved_identifier] = (tuple(path_sampled),cost_to_go)
@@ -588,8 +670,8 @@ def solve(inputconfig,VERBOSE = False):
 		tp = np.array(tp)
 		
 		# Define q(t) = (qx,qy)
-		qx = x_actor + dist_from_actor*np.cos(np.arctan2(yp,xp)+angle_from_actor)
-		qy = y_actor + dist_from_actor*np.sin(np.arctan2(yp,xp)+angle_from_actor)
+		qx = x_actor + dist_from_actor*np.cos(np.arctan2(yp,xp)+radians(angle_from_actor))
+		qy = y_actor + dist_from_actor*np.sin(np.arctan2(yp,xp)+radians(angle_from_actor))
 		
 		# Find first derivatives of q(t)
 		qxp = []
@@ -673,7 +755,8 @@ def solve(inputconfig,VERBOSE = False):
 			time_arr = np.append(time_arr,shot['end_time'])
 		for time in time_arr:
 			actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],time,SOLVED_CONFIG)
-			cur_position = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+			#cur_position = np.multiply(rotate([0,0],actor_slope_unitVect,shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+			cur_position = np.multiply(rotate([0,0],actor_slope_unitVect,-(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 			cur_position = np.append(cur_position, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 			cur_position = np.append(cur_position, time)
 			# Check if the path the robot is taking is possible with its turning constraints.
@@ -687,7 +770,8 @@ def solve(inputconfig,VERBOSE = False):
 
 		#calculate ctg from starting position to shot start
 		actor_xyt,actor_slope_unitVect = findPointOnPathAndSlope(SOLVED_CONFIG['actor']['path'],shot['start_time'],SOLVED_CONFIG)
-		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		#shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
+		shot_start_loc = np.multiply(rotate([0,0],actor_slope_unitVect,-(sum(shot['angle_range'])/2) + shot['actor_facing']),sum(shot['dist_range'])/2)+actor_xyt[0:2]
 		shot_start_loc = np.append(shot_start_loc, atan2(actor_slope_unitVect[1],actor_slope_unitVect[0]))
 		shot_start_loc = np.append(shot_start_loc, shot['start_time'])
 		#print(shot_start_loc)
@@ -696,6 +780,8 @@ def solve(inputconfig,VERBOSE = False):
 		path_sampled,cost_to_go = findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot)
 		if cost_to_go == -1:
 			return [],-1
+		elif cost_to_go == -50:
+			return[],-50
 
 
 			#Then create the circle through the two vectors at given solve resolution
@@ -766,7 +852,8 @@ def solve(inputconfig,VERBOSE = False):
 			if SOLVED_CONFIG['robots'][robotNum]['path'] == []:
 				del SOLVED_CONFIG['robots'][robotNum]['path']
 		#return with solution
-		print('Solution Found in {} seconds.'.format(time.process_time() - START_TIME))
+		SOLVED_CONFIG['solve']['processing_time'] = time.process_time() - START_TIME
+		print('Solution Found in {} seconds.'.format(SOLVED_CONFIG['solve']['processing_time']))
 		return SOLVED_CONFIG
 
 	class Robot():
@@ -843,6 +930,8 @@ def solve(inputconfig,VERBOSE = False):
 						unassigned_shots.remove(shot)
 					if new_robot.cost_to_go == -1:
 						continue
+					if new_robot.cost_to_go == -50:
+						return -50
 					robot_list.append(new_robot)
 					unassigned_robots.remove(robot)
 
@@ -897,8 +986,10 @@ def solve(inputconfig,VERBOSE = False):
 		#	return "Node({}{})".format([robot.__hash__() for robot in self.robots],self.time)
 
 		def __hash__(self):
-			return hash("Node({}{})".format([robot.__hash__() for robot in self.robots],self.time))
-	
+			#if self.parent != None:
+			#	return hash("Node({}{}{})".format([robot.__hash__() for robot in self.robots],self.time,self.parent.__hash__()))
+			#else:
+			return hash("Node({}{}{})".format([robot.__hash__() for robot in self.robots],self.time,self.available_shots))
 		def __eq__(self, other):
 			return self.__hash__() == other.__hash__()
 
@@ -909,6 +1000,7 @@ def solve(inputconfig,VERBOSE = False):
 	heapq.heapify(open_list)
 	open_list_dict = {}
 	closed_list = set(())
+	shot_end_time = max([shot['end_time'] for shot in SOLVED_CONFIG['shots']])
 
 	#Add first robot to the heap
 	startRobotList = []
@@ -927,16 +1019,28 @@ def solve(inputconfig,VERBOSE = False):
 		#		print('robot:',robot.identity, robot.given_shot)
 		#	for robot in node.assigned_robots:
 		#		print('robot:',robot.identity, robot.given_shot,robot.cost_to_go)
+		
 		#Remove one node from the heap and add it to the closed_list
 		current_node = heapq.heappop(open_list)
+		if len(open_list_dict) > 1:
+			del open_list_dict[current_node]
+		if VERBOSE == True:
+			print('Current robot:')
+			for robot in current_node.unassigned_robots:
+				print('robot:',robot.identity, robot.given_shot)
+			for robot in current_node.assigned_robots:
+				print('robot:',robot.identity, robot.given_shot,robot.cost_to_go)
 		closed_list.add(current_node)
 
 
-		if current_node.time == END_TIME and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
+		if current_node.time == shot_end_time and len(current_node.available_shots) == 0: #If the node has reached the end time, then finish and return the paths
 			return finish(current_node)
 		
-		for child_node in current_node.findChildren(): #For each of the children, find if it needs to be added to open_list, and do necessary
-			if child_node in closed_list or child_node in open_list:
+		all_children = current_node.findChildren()
+		if all_children == -50:
+			return -1
+		for child_node in all_children: #For each of the children, find if it needs to be added to open_list, and do necessary
+			if (child_node in closed_list or child_node in open_list):
 				continue
 			child_node.g = current_node.g + child_node.total_ctg
 			child_node.h = 0
@@ -957,7 +1061,7 @@ def solve(inputconfig,VERBOSE = False):
 
 	#If no solution found print that
 	print('No Solution Found, check your starting positions, speeds, shots, and robots.')
-	return SOLVED_CONFIG
+	return -1
 
 
 if __name__ == '__main__':
@@ -972,6 +1076,6 @@ if __name__ == '__main__':
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
 	#config = yaml.safe_load(open('result_working2.yaml', 'r'))
-	visualize(SOLVED_CONFIG,show_path = True,saveName = 'out.mp4')
+	visualize(SOLVED_CONFIG,show_path = True,saveName = None)
 	#config = yaml.safe_load(open('result.yaml', 'r'))
 	#visualize(config,'demo.gif')

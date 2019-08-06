@@ -1,0 +1,80 @@
+actor:
+  color: red
+  path:
+  - - 1
+    - 15
+    - 0
+    - 5
+    - 0
+  - - 39
+    - 15
+    - -90
+    - 5
+    - 10
+  timestep_resolution: 0.1
+animation:
+  fps: 30
+  in_shot: red
+  out_shot: blue
+map:
+  height: 30
+  path: white.png
+  width: 40
+robots:
+- camera_orientation: 280.5502830461505
+  color: green
+  fov: 132.66842952260222
+  max_speed: 28.417925566557606
+  max_turn_rad: 8.377182335521484
+  start_coord:
+  - 20.137819314371047
+  - 0.42245700244127715
+  - 4.7257058115406805
+  - 0
+- camera_orientation: 0 #44.14266768779623
+  color: green
+  fov: 84.62225416994318
+  max_speed: 20.508255858932714
+  max_turn_rad: 5.794978920279056
+  start_coord:
+  - 27.603033102051914
+  - 15.740118903288678
+  - 1.6822999930922884
+  - 0
+- camera_orientation: 47.63943397419253
+  color: green
+  fov: 139.897833128377
+  max_speed: 27.417146491368637
+  max_turn_rad: 19.711791183237853
+  start_coord:
+  - 38.39349596635518
+  - 8.711667599863013
+  - 3.015140755824353
+  - 0
+shots:
+- actor_facing: 2.6068169795941762
+  angle_range:
+  - -12.453347056271006
+  - -4.139363218039852
+  dist_range:
+  - 3.6548866269191795
+  - 8.867053893662977
+  end_time: 4.474904143901506
+  start_time: 2.1997062111995422
+- actor_facing: 4.4967060324895805
+  angle_range:
+  - -5.345857918434213
+  - 0.16258626564173095
+  dist_range:
+  - 8.475911617139422
+  - 8.607137883655444
+  end_time: 9.414667585593362
+  start_time: 5.706814425553053
+solve:
+  PRM_degrees: 20
+  PRM_num_points: 125
+  PRM_point_dist: 10
+  PRM_points: grid
+  PRM_timeout: 20
+  processing_time: 10.354641427000018
+  resolution: 0.1
