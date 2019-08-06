@@ -16,8 +16,7 @@ shots:
     actor_facing: 90                                                           # Number of degrees off the actor is from the direction the camera is facing
 
 actor:                                                                                     
-  path: [[1,15,0,5,0],[39,15,-90,5,10]]          # Path an actor will follow (x,y,theta_degrees,turn_radius_from_previous_timestep,time)
-  timestep_resolution: .1                                                       # The accuracy of recording the actor's path timestep. Used to test robot's dubins constraints agains path for validity checking
+  path: [[1,15,0,0],[39,15,-90,10]]          # Path an actor will follow (x,y,theta_degrees,turn_radius_from_previous_timestep,time)
   color: 'red'                                                                  # Color of the actor
                                                                                    
 animation:                                                                                     
@@ -32,23 +31,25 @@ map:
                                                                                   
 solve:                                                                                    
   resolution: .1                                                                # Quantity in meters to consider as a discrete point when finding a solution - linearly effects runtime of code
-  PRM_timeout: 20                                                              # Number of seconds before the PRM algorithm will admit defeat (can be inf for infinity)
-  PRM_point_dist: 10
-  PRM_degrees: 20
-  PRM_points: 'grid'                                                            # How the PRM algorithm finds points. Can be either 'grid' or 'random'. defaults to 'grid'
-  PRM_num_points: 125                                                           # Number of points to search through in PRM algorithm - only for random points. (rounded down to nearest cubic number for grid)
-                                                                                  
+  timestep_resolution: .1                                                       # Number of seconds to use when generating a path for the robots
+  AStar_timeout: 20                                                             # Number of seconds before the AStar algorithm will admit defeat (can be inf for infinity)
+  AStar_point_dist: 10                                                          # Number of units apart to spread points for astar search
+  AStar_degrees: 20                                                             # Number of degrees apart to discretize angles in astar search
+  AStar_points: 'grid'                                                          # How the astar algorithm finds points. Can be either 'grid' or 'random'. defaults to 'grid'
+  AStar_num_points: 125                                                         # Number of points to search through in astar algorithm - only for random points. (rounded down to nearest cubic number for grid)
+                         
+
 robots:                                                                         # robots
   - max_speed: 13                                                                # Max speed in meters per second
-    max_turn_rad: 0.7                                                           # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [0,0,0]                                                        # Starting coordinates of robot(s), can be "None"
+    min_turn_rad: 0.7                                                           # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    start_coord: [0,0,0]                                                        # Starting coordinates of robot(s), can be "None" coordinates in (x,y,theta)
     fov: 50                                                                     # Field of view of robot camera in degrees
     camera_orientation: 180                                                     # Default camera orientation - Degrees from facing forward
     color: 'green'                                                              # Color of the robot
                                                                                   
   - max_speed: 13                                                                # Max speed in meters per second
-    max_turn_rad: 0.7                                                           # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
-    start_coord: [35,25,0]                                                      # starting coordinates of robot(s), can be "None"
+    min_turn_rad: 0.7                                                           # The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    start_coord: [35,25,0]                                                      # starting coordinates of robot(s), can be "None" coordinates in (x,y,theta)
     fov: 50                                                                     # Field of view of robot camera in degrees
     camera_orientation: 180                                                     # Default camera orientation - Degrees from facing forward
     color: 'green'                                                           # Color of the robot

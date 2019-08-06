@@ -32,7 +32,7 @@ robots: #robots
     accel: 3 #Acceleration in meters per second per second
     length: 1 #Length of robot in meters
     width: .75 #Width of robot in meters
-    max_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters
+    min_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters
     start_coord: [0,0,0] #starting coordinates of robot(s), can be "None"
     fov: 360 #Field of view of robot camera in degrees
     camera_orientation: 180 #Degrees from facing forward
@@ -43,7 +43,7 @@ robots: #robots
     accel: 3 #Acceleration in meters per second per second
     length: 1 #Length of robot in meters
     width: .75 #Width of robot in meters
-    max_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
+    min_turn_rad: .7 #The raduis of the smallest circle the robot can turn in. Radius in meters - Actual is roughly 0.6858
     start_coord: [0,0,0] #starting coordinates of robot(s), can be "None"
     fov: 360 #Field of view of robot camera in degrees
     camera_orientation: 180 #Degrees from facing forward

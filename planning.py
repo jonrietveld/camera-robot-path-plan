@@ -281,10 +281,10 @@ def solve(inputconfig,VERBOSE = False):
 			current = current.parent
 		return True,{}
 
-	def PRM_Modified(parent_node,robot_cfg,start,shot = None,goal = None):
+	def AStar_Modified(parent_node,robot_cfg,start,shot = None,goal = None):
 		# Expects input of start to be (x,y,theta,time) and goal to be (x,y,theta)
-		aStar_Timeout = float(SOLVED_CONFIG['solve']['PRM_timeout']) #seconds
-		#PRM_num_points = SOLVED_CONFIG['solve']['PRM_num_points']
+		aStar_Timeout = float(SOLVED_CONFIG['solve']['AStar_timeout']) #seconds
+		#PRM_num_points = SOLVED_CONFIG['solve']['AStar_num_points']
 		class astar_node():
 			"""docstring for astar_node"""
 			def __init__(self, position, g = 0, parent = None):
@@ -305,14 +305,14 @@ def solve(inputconfig,VERBOSE = False):
 				return self.__hash__() == other.__hash__()
 	
 			def findChildren(self,point_array):
-				node_list_prm =[]
+				node_list_astar =[]
 	
 				# Don't look for node past the goal node.
 				if goal is not None and tuple(self.position) == tuple(goal):
 					return []
 				# Add all connections from current point to every other point to our point array so we know where our current point can lead
 				for dest_point in point_array:
-					dubins_path = dubins.shortest_path(self.position,dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+					dubins_path = dubins.shortest_path(self.position,dest_point, robot_cfg['min_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
 					# Check to make sure the dubins path doesn't pass through obstacles.
 					error = 0
 					for point in dubins_path:
@@ -333,20 +333,20 @@ def solve(inputconfig,VERBOSE = False):
 					if error == 1:
 						continue
 					dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
-					node_list_prm.append((dubins_path_length,tuple(dest_point)))
+					node_list_astar.append((dubins_path_length,tuple(dest_point)))
 
 				return_list = []
-				for vertex in node_list_prm:
+				for vertex in node_list_astar:
 					return_list.append(astar_node(vertex[1],vertex[0],self))
 				return return_list
 				
 		if goal is not None and start[-1] == shot['start_time']:
 			return -1
 		if VERBOSE == True:
-			print('Generating PRM points...')
+			print('Generating AStar points...')
 		#Randomly placed point.
-		if SOLVED_CONFIG['solve']['PRM_points'] == 'random':
-			point_array = [[random.uniform(0,SOLVED_CONFIG['map']['width']),random.uniform(0,SOLVED_CONFIG['map']['height']),random.uniform(0,2*pi)] for _ in range(SOLVED_CONFIG['solve']['PRM_num_points'])]
+		if SOLVED_CONFIG['solve']['AStar_points'] == 'random':
+			point_array = [[random.uniform(0,SOLVED_CONFIG['map']['width']),random.uniform(0,SOLVED_CONFIG['map']['height']),random.uniform(0,2*pi)] for _ in range(SOLVED_CONFIG['solve']['AStar_num_points'])]
 		# Statically placed points
 		else:
 			#cbrt_num_points = int((PRM_num_points + 1)**(1.0/3)) # Add one to the number of PRM points because of python rounding errors
@@ -360,9 +360,9 @@ def solve(inputconfig,VERBOSE = False):
 			#			point_array.append([i*width_increment,j*height_increment,k*theta_increment])
 
 			point_array = []
-			for i in np.arange(SOLVED_CONFIG['solve']['PRM_point_dist']/2,SOLVED_CONFIG['map']['width'],SOLVED_CONFIG['solve']['PRM_point_dist']):
-				for j in np.arange(SOLVED_CONFIG['solve']['PRM_point_dist'],SOLVED_CONFIG['map']['height'],SOLVED_CONFIG['solve']['PRM_point_dist']):
-					for k in np.arange(0,2*pi,radians(SOLVED_CONFIG['solve']['PRM_degrees'])):
+			for i in np.arange(SOLVED_CONFIG['solve']['AStar_point_dist']/2,SOLVED_CONFIG['map']['width'],SOLVED_CONFIG['solve']['AStar_point_dist']):
+				for j in np.arange(SOLVED_CONFIG['solve']['AStar_point_dist'],SOLVED_CONFIG['map']['height'],SOLVED_CONFIG['solve']['AStar_point_dist']):
+					for k in np.arange(0,2*pi,radians(SOLVED_CONFIG['solve']['AStar_degrees'])):
 						pointx = int(i * len(IMG[0]) / float(SOLVED_CONFIG['map']['width']))
 						pointy = int(j * len(IMG) / float(SOLVED_CONFIG['map']['height']))
 						if IMG[-pointy][pointx]:
@@ -375,12 +375,12 @@ def solve(inputconfig,VERBOSE = False):
 		#directed_graph = {}
 		#for current_point in point_array:
 		#	
-		#	directed_graph[tuple(current_point)] = tuple(node_list_prm)
+		#	directed_graph[tuple(current_point)] = tuple(node_list_astar)
 		#
 		##Then do the same for the starting node.
-		#node_list_prm = []
+		#node_list_astar = []
 		#for dest_point in point_array:
-		#	dubins_path = dubins.shortest_path(start[0:3],dest_point, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+		#	dubins_path = dubins.shortest_path(start[0:3],dest_point, robot_cfg['min_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
 		#	# Check to make sure the dubins path doesn't pass through obstacles.
 		#	error = 0
 		#	for point in dubins_path:
@@ -396,28 +396,28 @@ def solve(inputconfig,VERBOSE = False):
 		#	if error == 1:
 		#		continue
 		#	dubins_path_length = SOLVE_RESOLUTION*len(dubins_path)
-		#	node_list_prm.append((dubins_path_length,tuple(dest_point)))
-		#directed_graph[tuple(start[0:3])] = tuple(node_list_prm)
+		#	node_list_astar.append((dubins_path_length,tuple(dest_point)))
+		#directed_graph[tuple(start[0:3])] = tuple(node_list_astar)
 		
 
 		if VERBOSE == True:
 			print('Beginning A* Search...')
 		# Run A* on the connected points to find the lowest path length that will produce a usable path
-		open_list_prm = []
-		closed_list_prm = set(())
-		open_list_dict_prm = {}
+		open_list_astar = []
+		closed_list_astar = set(())
+		open_list_dict_astar = {}
 		# Append Starting node, and run A*
-		open_list_prm.append(astar_node(start[0:3]))
+		open_list_astar.append(astar_node(start[0:3]))
 		timeout = time.process_time()
-		while len(open_list_prm) > 0 and time.process_time() - timeout < aStar_Timeout:
-			current_node_prm = heapq.heappop(open_list_prm)
+		while len(open_list_astar) > 0 and time.process_time() - timeout < aStar_Timeout:
+			current_node_astar = heapq.heappop(open_list_astar)
 			#if goal is not None:
-			#if tuple(current_node_prm.position[0:3]) != tuple(goal[0:3]):
-			closed_list_prm.add(current_node_prm)
-			if len(open_list_dict_prm) > 0 and current_node_prm in open_list_dict_prm:
-				del open_list_dict_prm[current_node_prm]
-			if goal is not None and tuple(current_node_prm.position) == tuple(goal) or goal is None: #If goal position reached, then check if valid solution and return if it is.
-				current = current_node_prm
+			#if tuple(current_node_astar.position[0:3]) != tuple(goal[0:3]):
+			closed_list_astar.add(current_node_astar)
+			if len(open_list_dict_astar) > 0 and current_node_astar in open_list_dict_astar:
+				del open_list_dict_astar[current_node_astar]
+			if goal is not None and tuple(current_node_astar.position) == tuple(goal) or goal is None: #If goal position reached, then check if valid solution and return if it is.
+				current = current_node_astar
 				# Print out a possible array of locations to travel avoiding obsticles (next check if it avoids shots)
 				if VERBOSE == True:
 					path_print = []
@@ -428,15 +428,15 @@ def solve(inputconfig,VERBOSE = False):
 				
 				# Connect all points in possible array with dubins path				
 				path = []
-				current = current_node_prm
+				current = current_node_astar
 				if current.parent is None:
 					path = [current.position]
 				while current.parent is not None:
 					#if SOLVED_CONFIG['solve']['algorithm'] == 'dubins':
-					dubins_path = dubins.shortest_path(current.parent.position, list(current.position), robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+					dubins_path = dubins.shortest_path(current.parent.position, list(current.position), robot_cfg['min_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
 					path += dubins_path[::-1]
 					#else:
-					#	reeds_shepp_path = reeds_shepp.path_sample(current.parent.position,list(current.position),robot_cfg['max_turn_rad'],SOLVE_RESOLUTION)
+					#	reeds_shepp_path = reeds_shepp.path_sample(current.parent.position,list(current.position),robot_cfg['min_turn_rad'],SOLVE_RESOLUTION)
 					#	path += reeds_shepp_path[::-1]
 					current = current.parent
 				# Flip path to face forwards
@@ -447,7 +447,7 @@ def solve(inputconfig,VERBOSE = False):
 					timestep_increment = (shot['start_time']-start[-1])/len(path)
 				else:
 					if len(path) == 1:
-						for i in np.arange(start[-1],SOLVED_CONFIG['actor']['path'][-1][-1],SOLVED_CONFIG['actor']['timestep_resolution']):
+						for i in np.arange(start[-1],SOLVED_CONFIG['actor']['path'][-1][-1],SOLVED_CONFIG['solve']['timestep_resolution']):
 							path.append(path[0])
 					timestep_increment = (SOLVED_CONFIG['actor']['path'][-1][-1] - start[-1])/len(path)
 				for pos in range(len(path)):
@@ -466,31 +466,31 @@ def solve(inputconfig,VERBOSE = False):
 			else: #Otherwise we are solving for trajectories to get robot out of shot
 				pass
 
-			for child_node_prm in current_node_prm.findChildren(point_array): #For each of the children, find if it needs to be added to open_list, and do necessary
-				if child_node_prm in closed_list_prm and goal is not None and tuple(child_node_prm.position) != tuple(goal):
+			for child_node_astar in current_node_astar.findChildren(point_array): #For each of the children, find if it needs to be added to open_list, and do necessary
+				if child_node_astar in closed_list_astar and goal is not None and tuple(child_node_astar.position) != tuple(goal):
 					continue
-				child_node_prm.g = current_node_prm.g + child_node_prm.g
+				child_node_astar.g = current_node_astar.g + child_node_astar.g
 				if goal is not None:
-					child_node_prm.h = SOLVE_RESOLUTION*len(dubins.shortest_path(child_node_prm.position,goal, robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0])
-				child_node_prm.f = child_node_prm.g + child_node_prm.h
-				if child_node_prm in open_list_dict_prm:
-					if child_node_prm.g >= open_list_dict_prm[child_node_prm]:
-						#if goal is not None or current_node_prm.position == child_node_prm.position:
-						#if child_node_prm.position[0] == 30.06477879236698:
+					child_node_astar.h = SOLVE_RESOLUTION*len(dubins.shortest_path(child_node_astar.position,goal, robot_cfg['min_turn_rad']).sample_many(SOLVE_RESOLUTION)[0])
+				child_node_astar.f = child_node_astar.g + child_node_astar.h
+				if child_node_astar in open_list_dict_astar:
+					if child_node_astar.g >= open_list_dict_astar[child_node_astar]:
+						#if goal is not None or current_node_astar.position == child_node_astar.position:
+						#if child_node_astar.position[0] == 30.06477879236698:
 						continue
-				if goal is None and current_node_prm.position == child_node_prm.position:
+				if goal is None and current_node_astar.position == child_node_astar.position:
 					continue
-				#print(child_node_prm)
+				#print(child_node_astar)
 
-				open_list_dict_prm[child_node_prm] = child_node_prm.g
-				heapq.heappush(open_list_prm, child_node_prm)
+				open_list_dict_astar[child_node_astar] = child_node_astar.g
+				heapq.heappush(open_list_astar, child_node_astar)
 		#If no solution is found by A* return -1
 		if time.process_time() - timeout < aStar_Timeout:
 			if VERBOSE == True:
-				print('No solution to PRM')
+				print('No solution to AStar')
 		else:
 			if VERBOSE == True:
-				print('PRM timeout hit')
+				print('AStar timeout hit')
 		return -1
 
 	def findPathToShot(current_position,shot_start_loc,robot_cfg,parent_node,shot):
@@ -511,7 +511,7 @@ def solve(inputconfig,VERBOSE = False):
 					shot2 = cur_shot_num + 1
 			print('Error: Shot {} overlaps with shot {}. (shots are not zero indexed)'.format(shot1,shot2))
 			#error_parent = deepcopy(parent_node)
-			#path_sampled = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
+			#path_sampled = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['min_turn_rad']).sample_many(SOLVE_RESOLUTION)[0]
 			#
 			##Add on timesteps to dubens path
 			#timestep_increment = (shot['start_time']-current_position[3])/len(path_sampled)
@@ -534,10 +534,10 @@ def solve(inputconfig,VERBOSE = False):
 
 		#Check if a direct dubins path is valid, and if it is, just return that path
 		#if SOLVED_CONFIG['solve']['algorithm'] == 'dubins':
-		path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'])
+		path = dubins.shortest_path(current_position[0:3], shot_start_loc[0:3], robot_cfg['min_turn_rad'])
 		path_sampled = path.sample_many(SOLVE_RESOLUTION)[0]
 		#else:
-		#	path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['max_turn_rad'],SOLVE_RESOLUTION)
+		#	path_sampled = reeds_shepp.path_sample(current_position[0:3], shot_start_loc[0:3], robot_cfg['min_turn_rad'],SOLVE_RESOLUTION)
 
 		#Add on timesteps to dubens path
 		timestep_increment = (shot['start_time']-current_position[-1])/len(path_sampled)
@@ -602,15 +602,15 @@ def solve(inputconfig,VERBOSE = False):
 				print('Path to get to shot {} intersects with shot {}.'.format(shot,return_shot))
 
 
-		#Because regular dubins didnt solve the problem, run a modified version of PRM to actually solve the problem
+		#Because regular dubins didnt solve the problem, run a modified version of AStar to actually solve the problem
 		if VERBOSE == True:
-			print('Starting PRM for Shot Planning...')
+			print('Starting AStar for Shot Planning...')
 
 		#print('current_position:',current_position,'shot_start_loc',shot_start_loc)
-		path_sampled = PRM_Modified(parent_node,robot_cfg,current_position,shot, shot_start_loc[0:3])
+		path_sampled = AStar_Modified(parent_node,robot_cfg,current_position,shot, shot_start_loc[0:3])
 		if VERBOSE == True:
-			print('Finished PRM')
-		#If PRM failed, just return nothing
+			print('Finished AStar')
+		#If AStar failed, just return nothing
 		if path_sampled == -1:
 			ALREADY_SOLVED_PATHS[already_solved_identifier] = [],-1
 			return [],-1
@@ -641,7 +641,7 @@ def solve(inputconfig,VERBOSE = False):
 
 	def isFollowableShot(actor_path_followable, robot_followable,shot_followable):
 		# Added 'followable' to the end of most variables to keep seperate from other functions
-		radius = robot_followable['max_turn_rad']
+		radius = robot_followable['min_turn_rad']
 		max_speed = robot_followable['max_speed']
 		start_time_followable = shot_followable['start_time']
 		end_time_followable = shot_followable['end_time']
@@ -748,7 +748,7 @@ def solve(inputconfig,VERBOSE = False):
 		# Find the path to follow the actor
 		following_actor = []
 		cur_position = np.array([])
-		time_arr = np.arange(shot['start_time'],shot['end_time'],SOLVED_CONFIG['actor']['timestep_resolution'])
+		time_arr = np.arange(shot['start_time'],shot['end_time'],SOLVED_CONFIG['solve']['timestep_resolution'])
 		#If endpoint was missed, add it
 		if not time_arr[-1] == shot['end_time']:
 			time_arr = np.append(time_arr,shot['end_time'])
@@ -836,12 +836,12 @@ def solve(inputconfig,VERBOSE = False):
 			SOLVED_CONFIG['robots'][element]['path'] = robot_paths[element][::-1]
 			if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][3] != END_TIME:
 				if VERBOSE == True:
-					print('Starting PRM to keep Robot out of Shots...') # Run PRM_Modified over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
-				roboavoid = PRM_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1])
+					print('Starting AStar to keep Robot out of Shots...') # Run AStar_Modified over possible robot locations with the goal of A* as the end time. (Don't care where robot ends up)
+				roboavoid = AStar_Modified(current_node,robot.robot_cfg,SOLVED_CONFIG['robots'][element]['path'][-1])
 				if not roboavoid == -1:
 					SOLVED_CONFIG['robots'][element]['path'].extend(roboavoid)
 				if VERBOSE == True:
-					print('Finished PRM')
+					print('Finished AStar')
 					SOLVED_CONFIG['robots'][element]['path'] = [[p[0],p[1],p[3]] for p in SOLVED_CONFIG['robots'][element]['path']]
 			if SOLVED_CONFIG['robots'][element]['path'] != [] and SOLVED_CONFIG['robots'][element]['path'][-1][2] < END_TIME:
 				SOLVED_CONFIG['robots'][element]['path'].append(SOLVED_CONFIG['robots'][element]['path'][-1][0:2] + [END_TIME])
@@ -878,7 +878,7 @@ def solve(inputconfig,VERBOSE = False):
 			return self.identity == other.identity
 
 	class Node():
-		"""A Node for Dykstra Search"""
+		"""A Node for Dijkstra Search"""
 	
 		def __init__(self,robots,available_shots,time,parent=None):
 			self.robots = robots
@@ -993,7 +993,7 @@ def solve(inputconfig,VERBOSE = False):
 			return self.__hash__() == other.__hash__()
 
 
-	#A* algorithm
+	#Dijkstra algorithm
 	#Initialize lists/heaps/dictionaries and endtime
 	open_list = []
 	heapq.heapify(open_list)
