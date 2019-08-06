@@ -3276,6 +3276,6 @@ solve:
   AStar_point_dist: 10
   AStar_points: grid
   AStar_timeout: 20
-  processing_time: 4.022315914
+  processing_time: 6.259452379
   resolution: 0.1
   timestep_resolution: 0.1

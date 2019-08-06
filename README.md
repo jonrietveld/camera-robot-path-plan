@@ -25,7 +25,8 @@ $ git clone https://github.com/jonrietveld/camera-robot-path-plan.git
 
 # Usage
 ## Yaml creation
-Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,time).
+Follow the format of the 'rocky.yaml' file. When entering values for 'actor' 'path' please enter values in the format (x,y,theta,time). Follow the picture for creating shots.
+![Shot Creation](./shot-config.png)
 ## Running
 Place planning.py in the same directory as your program to be able to import it.
 
