@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 #from matplotlib import collections
@@ -1069,7 +1068,7 @@ if __name__ == '__main__':
 	#config = yaml.safe_load(open('result_working.yaml', 'r'))
 	#visualize(config)
 	config = yaml.safe_load(open('rocky.yaml','r'))
-	SOLVED_CONFIG = solve(config,VERBOSE = True)
+	SOLVED_CONFIG = solve(config,VERBOSE = False)
 	with open('errors.yaml', 'w') as yaml_file:
 		yaml.dump(SOLVED_CONFIG, yaml_file, default_flow_style=False)
 	#visualize(SOLVED_CONFIG)
